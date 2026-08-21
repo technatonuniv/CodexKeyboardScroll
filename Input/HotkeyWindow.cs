@@ -42,8 +42,9 @@ namespace CodexKeyboardScroll
         internal bool IsFocusToggleRegistered { get; private set; }
         internal bool FocusToggleUsesAlt { get; private set; }
         internal string FocusToggleText { get; private set; }
+        internal bool UsingFallbackShortcut { get; private set; }
 
-        internal bool EnableFocusToggle(FocusShortcut preferred, out string error)
+        internal bool EnableFocusToggle(FocusShortcut preferred, out HotkeyError error)
         {
             DisableFocusToggle();
             var attempted = new HashSet<FocusShortcut>();
@@ -65,14 +66,14 @@ namespace CodexKeyboardScroll
                 {
                     IsFocusToggleRegistered = true;
                     FocusToggleUsesAlt = UtilitySettings.ShortcutUsesAlt(shortcut);
-                    FocusToggleText = UtilitySettings.ShortcutText(shortcut)
-                        + (shortcut == preferred ? string.Empty : " (fallback)");
-                    error = null;
+                    FocusToggleText = UtilitySettings.ShortcutText(shortcut);
+                    UsingFallbackShortcut = shortcut != preferred;
+                    error = new HotkeyError(HotkeyErrorKind.None, 0);
                     return true;
                 }
             }
 
-            error = "All available F-based shortcuts are currently in use by another application.";
+            error = new HotkeyError(HotkeyErrorKind.FocusShortcutsUnavailable, 0);
             return false;
         }
 
@@ -83,10 +84,11 @@ namespace CodexKeyboardScroll
                 NativeInput.UnregisterHotKey(Handle, FocusToggleId);
                 IsFocusToggleRegistered = false;
                 FocusToggleUsesAlt = false;
+                UsingFallbackShortcut = false;
             }
         }
 
-        internal bool EnableScrollingHotkeys(bool captureSpace, out string error)
+        internal bool EnableScrollingHotkeys(bool captureSpace, out HotkeyError error)
         {
             DisableScrollingHotkeys();
             var definitions = new List<HotkeyDefinition>
@@ -113,12 +115,11 @@ namespace CodexKeyboardScroll
 
                 int win32Error = Marshal.GetLastWin32Error();
                 DisableScrollingHotkeys();
-                error = "Could not capture the navigation keys (Win32 " + win32Error
-                    + "). Another application may be using them.";
+                error = new HotkeyError(HotkeyErrorKind.NavigationKeysUnavailable, win32Error);
                 return false;
             }
 
-            error = null;
+            error = new HotkeyError(HotkeyErrorKind.None, 0);
             return true;
         }
 

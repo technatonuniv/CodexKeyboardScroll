@@ -108,7 +108,11 @@ namespace CodexKeyboardScroll
 
         internal static bool ScrollForeground(int wheelDelta)
         {
-            IntPtr window = GetForegroundWindow();
+            return ScrollWindow(GetForegroundWindow(), wheelDelta);
+        }
+
+        internal static bool ScrollWindow(IntPtr window, int wheelDelta)
+        {
             Rect rect;
             if (window == IntPtr.Zero || !GetWindowRect(window, out rect))
             {

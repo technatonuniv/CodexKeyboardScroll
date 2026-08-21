@@ -6,9 +6,13 @@ Thank you for improving Codex Keyboard Scroll.
 
 - Keep the utility compatible with Windows 10 and .NET Framework 4.8.
 - Preserve the portable, single-executable distribution model.
-- Avoid adding background services, administrator requirements, telemetry, or automatic startup.
+- Avoid adding background services, administrator requirements, telemetry, or startup behavior that is not explicitly user-controlled.
 - Keep UI text, code comments, commit messages, and documentation in English.
 - Add comments only where they explain a non-obvious constraint, workaround, or design decision.
+
+## Localization
+
+Language packs live in `Localization/Resources` and are embedded in the executable. Add a single UTF-8 `.lang` file whose name is a BCP 47 language code; no application-code change is required. Every pack must define every `UiText` key and preserve the format placeholders used by the English pack. The self-tests enforce both rules.
 
 ## Build and test
 

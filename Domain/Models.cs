@@ -15,11 +15,46 @@ namespace CodexKeyboardScroll
         CtrlShiftF
     }
 
-    internal enum ScrollSpeed
+    internal enum ComposerStatus
     {
-        Slow,
-        Normal,
-        Fast
+        Locating,
+        Found,
+        CoordinateFallback
+    }
+
+    internal enum ApplicationMode
+    {
+        Disabled,
+        Waiting,
+        Reading
+    }
+
+    internal enum UpdateCheckStatus
+    {
+        Idle,
+        Checking,
+        UpToDate,
+        UpdateAvailable,
+        Failed
+    }
+
+    internal enum HotkeyErrorKind
+    {
+        None,
+        FocusShortcutsUnavailable,
+        NavigationKeysUnavailable
+    }
+
+    internal struct HotkeyError
+    {
+        internal readonly HotkeyErrorKind Kind;
+        internal readonly int Win32Error;
+
+        internal HotkeyError(HotkeyErrorKind kind, int win32Error)
+        {
+            Kind = kind;
+            Win32Error = win32Error;
+        }
     }
 
     internal struct KeyboardStroke

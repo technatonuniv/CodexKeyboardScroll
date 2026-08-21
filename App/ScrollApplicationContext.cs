@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace CodexKeyboardScroll
@@ -7,22 +8,18 @@ namespace CodexKeyboardScroll
     internal sealed class ScrollApplicationContext : ApplicationContext
     {
         private readonly UtilitySettings settings;
+        private readonly LocalizationManager localizer;
+        private readonly StartupRegistration startupRegistration;
+        private readonly UpdateCheckService updateCheckService;
         private readonly ComposerLocator composerLocator;
         private readonly HotkeyWindow hotkeys;
         private readonly KeyboardHook keyboardHook;
+        private readonly AppIconSet icons;
+        private readonly TrayMenuView menuView;
         private readonly NotifyIcon trayIcon;
         private readonly Timer pollTimer;
         private readonly Timer focusToggleTimer;
-
-        private readonly ToolStripMenuItem enabledItem;
-        private readonly ToolStripMenuItem readingModeItem;
-        private readonly ToolStripMenuItem spaceScrollItem;
-        private readonly ToolStripMenuItem summaryItem;
-        private readonly ToolStripMenuItem diagnosticModeItem;
-        private readonly ToolStripMenuItem diagnosticShortcutItem;
-        private readonly ToolStripMenuItem diagnosticAutomationItem;
-        private readonly ToolStripMenuItem[] shortcutItems;
-        private readonly ToolStripMenuItem[] speedItems;
+        private readonly Timer updateCheckTimer;
 
         private bool toolEnabled = true;
         private bool readingMode;
@@ -34,98 +31,82 @@ namespace CodexKeyboardScroll
         private int lastHotkeyWarningTick;
         private int hotkeyFailureCount;
         private bool disposed;
+        private bool updateCheckInProgress;
 
         internal ScrollApplicationContext()
         {
             settings = UtilitySettings.Load();
+            localizer = new LocalizationManager(settings.LanguageCode);
+            settings.LanguageCode = localizer.RequestedLanguageCode;
+            startupRegistration = new StartupRegistration(Application.ExecutablePath);
+            updateCheckService = new UpdateCheckService();
             composerLocator = new ComposerLocator();
             hotkeys = new HotkeyWindow(HandleScrollHotkey, QueueFocusToggle);
-
-            summaryItem = DiagnosticItem("Ready · Alt+F · UIA");
-            diagnosticModeItem = DiagnosticItem("Mode: ready for transcript focus");
-            diagnosticShortcutItem = DiagnosticItem("Focus shortcut: Alt+F");
-            diagnosticAutomationItem = DiagnosticItem("UI Automation: locating composer...");
-            var diagnosticsMenu = new ToolStripMenuItem("Status and diagnostics");
-            diagnosticsMenu.DropDownItems.Add(diagnosticModeItem);
-            diagnosticsMenu.DropDownItems.Add(diagnosticShortcutItem);
-            diagnosticsMenu.DropDownItems.Add(diagnosticAutomationItem);
-            diagnosticsMenu.DropDownItems.Add(DiagnosticItem("Version: 1.4.1"));
-
-            enabledItem = new ToolStripMenuItem("Utility enabled", null, ToggleEnabled)
-            {
-                Checked = true,
-                CheckOnClick = true
-            };
-            readingModeItem = new ToolStripMenuItem("Reading mode", null, ToggleReadingMode)
-            {
-                CheckOnClick = true
-            };
-
-            var shortcutMenu = new ToolStripMenuItem("Focus shortcut");
-            shortcutItems = new[]
-            {
-                ShortcutItem("Alt+F", FocusShortcut.AltF),
-                ShortcutItem("Ctrl+Alt+F", FocusShortcut.CtrlAltF),
-                ShortcutItem("Ctrl+Shift+F", FocusShortcut.CtrlShiftF)
-            };
-            shortcutMenu.DropDownItems.AddRange(shortcutItems);
-
-            var speedMenu = new ToolStripMenuItem("Scroll speed");
-            speedItems = new[]
-            {
-                SpeedItem("Slow", ScrollSpeed.Slow),
-                SpeedItem("Normal", ScrollSpeed.Normal),
-                SpeedItem("Fast", ScrollSpeed.Fast)
-            };
-            speedMenu.DropDownItems.AddRange(speedItems);
-
-            spaceScrollItem = new ToolStripMenuItem("Space scrolls the page", null, ToggleSpaceBehavior)
-            {
-                Checked = settings.SpaceScroll,
-                CheckOnClick = true
-            };
-
-            var exitItem = new ToolStripMenuItem("Exit", null, delegate { ExitThread(); });
-            var menu = new ContextMenuStrip();
-            menu.Items.Add(summaryItem);
-            menu.Items.Add(diagnosticsMenu);
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(enabledItem);
-            menu.Items.Add(readingModeItem);
-            menu.Items.Add(shortcutMenu);
-            menu.Items.Add(speedMenu);
-            menu.Items.Add(spaceScrollItem);
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(exitItem);
-            menu.Opening += delegate { UpdateMenuText(); };
+            icons = new AppIconSet();
+            menuView = new TrayMenuView(localizer, settings, startupRegistration.IsEnabled);
+            WireMenuEvents();
 
             trayIcon = new NotifyIcon
             {
-                ContextMenuStrip = menu,
-                Icon = SystemIcons.Information,
-                Text = "Codex Keyboard Scroll",
+                ContextMenuStrip = menuView.Menu,
+                Icon = icons.Waiting,
+                Text = TooltipText(ApplicationMode.Waiting),
                 Visible = true
             };
-            trayIcon.DoubleClick += ShowEnabledState;
 
             focusToggleTimer = new Timer { Interval = 20 };
             focusToggleTimer.Tick += CompleteFocusToggle;
+
+            updateCheckTimer = new Timer { Interval = 60 * 60 * 1000 };
+            updateCheckTimer.Tick += CheckAutomaticUpdates;
+            updateCheckTimer.Start();
 
             pollTimer = new Timer { Interval = 25 };
             pollTimer.Tick += Poll;
             pollTimer.Start();
 
-            string hookError;
+            int hookError;
             keyboardHook = new KeyboardHook(HandlePrintableKey, out hookError);
-            if (hookError != null)
+            if (hookError != 0)
             {
-                ShowBalloon(hookError, ToolTipIcon.Warning);
+                ShowBalloon(localizer.Format(UiText.ErrorKeyboardHookUnavailable, hookError), ToolTipIcon.Warning);
             }
 
+            RestoreKnownUpdate();
+            UpdateUi();
             ShowBalloon(
-                "Running. " + UtilitySettings.ShortcutText(settings.FocusShortcut)
-                    + " switches between the transcript and composer.",
+                localizer.Format(
+                    UiText.BalloonRunning,
+                    UtilitySettings.ShortcutText(settings.FocusShortcut)),
                 ToolTipIcon.Info);
+            BeginAutomaticUpdateCheckIfDue();
+        }
+
+        private ApplicationMode CurrentMode
+        {
+            get
+            {
+                return !toolEnabled
+                    ? ApplicationMode.Disabled
+                    : readingMode ? ApplicationMode.Reading : ApplicationMode.Waiting;
+            }
+        }
+
+        private void WireMenuEvents()
+        {
+            menuView.EnabledChanged += ToggleEnabled;
+            menuView.ReadingModeChanged += ToggleReadingMode;
+            menuView.ShortcutChanged += ChangeShortcut;
+            menuView.SpeedChanged += ChangeSpeed;
+            menuView.SpaceScrollChanged += ToggleSpaceBehavior;
+            menuView.StartupChanged += ToggleStartup;
+            menuView.AutomaticUpdateChecksChanged += ToggleAutomaticUpdateChecks;
+            menuView.LanguageChanged += ChangeLanguage;
+            menuView.OpenRepositoryRequested += OpenRepository;
+            menuView.CheckUpdatesRequested += CheckForUpdates;
+            menuView.OpenLatestReleaseRequested += OpenLatestRelease;
+            menuView.ExitRequested += ExitThread;
+            menuView.Opening += UpdateUi;
         }
 
         private void Poll(object sender, EventArgs e)
@@ -179,7 +160,7 @@ namespace CodexKeyboardScroll
                 hotkeys.DisableFocusToggle();
                 nextHotkeyRetryTick = 0;
                 hotkeyFailureCount = 0;
-                if (stateChanged) UpdateMenuText();
+                if (stateChanged) UpdateUi();
                 return;
             }
 
@@ -197,42 +178,43 @@ namespace CodexKeyboardScroll
             // Hotkeys can be unavailable briefly while another app owns them. Retrying
             // keeps a transient conflict from disabling the utility until restart.
             nextHotkeyRetryTick = unchecked(now + 2000);
-            string error;
+            HotkeyError error;
             if (!hotkeys.EnableFocusToggle(settings.FocusShortcut, out error))
             {
                 hotkeyFailureCount++;
-                diagnosticShortcutItem.Text = "Focus shortcut: registration retry " + hotkeyFailureCount;
                 if (lastHotkeyWarningTick == 0 || unchecked(now - lastHotkeyWarningTick) >= 30000)
                 {
                     lastHotkeyWarningTick = now;
-                    ShowBalloon(error + " The utility will retry automatically.", ToolTipIcon.Warning);
+                    ShowBalloon(
+                        localizer.Format(
+                            UiText.BalloonHotkeyRetry,
+                            LocalizeHotkeyError(error)),
+                        ToolTipIcon.Warning);
                 }
-                UpdateMenuText();
+                UpdateUi();
                 return;
             }
 
             nextHotkeyRetryTick = 0;
             hotkeyFailureCount = 0;
-            diagnosticShortcutItem.Text = "Focus shortcut: " + hotkeys.FocusToggleText;
-            UpdateMenuText();
+            UpdateUi();
         }
 
         private void SetReadingMode(bool enabled)
         {
             if (readingMode == enabled)
             {
-                UpdateMenuText();
+                UpdateUi();
                 return;
             }
 
             if (enabled)
             {
-                string error;
+                HotkeyError error;
                 if (!hotkeys.EnableScrollingHotkeys(settings.SpaceScroll, out error))
                 {
-                    readingModeItem.Checked = false;
-                    ShowBalloon(error, ToolTipIcon.Error);
-                    UpdateMenuText();
+                    ShowBalloon(LocalizeHotkeyError(error), ToolTipIcon.Error);
+                    UpdateUi();
                     return;
                 }
             }
@@ -242,8 +224,7 @@ namespace CodexKeyboardScroll
             }
 
             readingMode = enabled;
-            readingModeItem.Checked = enabled;
-            UpdateMenuText();
+            UpdateUi();
         }
 
         private void HandleScrollHotkey(ScrollCommand command)
@@ -254,17 +235,16 @@ namespace CodexKeyboardScroll
                 return;
             }
 
-            NativeInput.ScrollForeground(ScrollProfile.WheelDelta(command, settings.ScrollSpeed));
+            NativeInput.ScrollForeground(
+                ScrollProfile.WheelDelta(command, settings.ScrollSpeedLevel));
         }
 
         private void QueueFocusToggle()
         {
-            if (!toolEnabled || !NativeInput.IsChatForeground())
+            if (toolEnabled && NativeInput.IsChatForeground())
             {
-                return;
+                focusToggleTimer.Start();
             }
-
-            focusToggleTimer.Start();
         }
 
         private void CompleteFocusToggle(object sender, EventArgs e)
@@ -329,119 +309,251 @@ namespace CodexKeyboardScroll
             return NativeInput.FocusComposerAndReplay(stroke);
         }
 
-        private void ToggleEnabled(object sender, EventArgs e)
+        private void ToggleEnabled(bool enabled)
         {
-            toolEnabled = enabledItem.Checked;
+            toolEnabled = enabled;
             if (!toolEnabled)
             {
                 SetReadingMode(false);
                 hotkeys.DisableFocusToggle();
                 nextHotkeyRetryTick = 0;
             }
-            UpdateMenuText();
+            UpdateUi();
         }
 
-        private void ToggleReadingMode(object sender, EventArgs e)
+        private void ToggleReadingMode(bool enabled)
         {
-            if (readingModeItem.Checked == readingMode)
+            if (enabled && (!toolEnabled || !NativeInput.IsChatForeground()))
+            {
+                ShowBalloon(localizer.Text(UiText.BalloonActivateCodex), ToolTipIcon.Warning);
+                UpdateUi();
+                return;
+            }
+            SetReadingMode(enabled);
+        }
+
+        private void ChangeShortcut(FocusShortcut shortcut)
+        {
+            settings.FocusShortcut = shortcut;
+            SaveSettings();
+            hotkeys.DisableFocusToggle();
+            nextHotkeyRetryTick = 0;
+            UpdateUi();
+        }
+
+        private void ChangeSpeed(decimal level)
+        {
+            settings.ScrollSpeedLevel = ScrollProfile.NormalizeLevel(level);
+            SaveSettings();
+            UpdateUi();
+        }
+
+        private void OpenRepository()
+        {
+            OpenLink(RepositoryLinks.RepositoryUrl);
+        }
+
+        private void OpenLatestRelease()
+        {
+            OpenLink(RepositoryLinks.LatestReleaseUrl);
+        }
+
+        private void CheckForUpdates()
+        {
+            BeginUpdateCheck(false);
+        }
+
+        private void CheckAutomaticUpdates(object sender, EventArgs e)
+        {
+            BeginAutomaticUpdateCheckIfDue();
+        }
+
+        private void BeginAutomaticUpdateCheckIfDue()
+        {
+            if (UpdateCheckSchedule.IsDue(
+                settings.AutomaticUpdateChecks,
+                settings.LastUpdateCheckUtc,
+                DateTime.UtcNow))
+            {
+                BeginUpdateCheck(true);
+            }
+        }
+
+        private async void BeginUpdateCheck(bool automatic)
+        {
+            if (updateCheckInProgress)
             {
                 return;
             }
-            if (readingModeItem.Checked && (!toolEnabled || !NativeInput.IsChatForeground()))
+            if (automatic && !UpdateCheckSchedule.IsDue(
+                settings.AutomaticUpdateChecks,
+                settings.LastUpdateCheckUtc,
+                DateTime.UtcNow))
             {
-                readingModeItem.Checked = false;
-                ShowBalloon("Activate the ChatGPT/Codex window first.", ToolTipIcon.Warning);
                 return;
             }
-            SetReadingMode(readingModeItem.Checked);
+
+            updateCheckInProgress = true;
+            if (automatic || settings.AutomaticUpdateChecks)
+            {
+                settings.LastUpdateCheckUtc = DateTime.UtcNow;
+                SaveSettings();
+            }
+            menuView.SetUpdateCheckStatus(UpdateCheckStatus.Checking, null);
+            Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            UpdateCheckResult result = await updateCheckService.CheckAsync(currentVersion);
+            if (disposed)
+            {
+                return;
+            }
+
+            updateCheckInProgress = false;
+            if (result.Status == UpdateCheckStatus.UpdateAvailable
+                && result.LatestVersion != null)
+            {
+                settings.LatestKnownVersion = result.LatestVersion.ToString(3);
+                SaveSettings();
+            }
+            else if (result.Status == UpdateCheckStatus.UpToDate
+                && settings.LatestKnownVersion.Length != 0)
+            {
+                settings.LatestKnownVersion = string.Empty;
+                SaveSettings();
+            }
+            menuView.SetUpdateCheckStatus(result.Status, result.LatestVersion);
         }
 
-        private void ToggleSpaceBehavior(object sender, EventArgs e)
+        private void ToggleAutomaticUpdateChecks(bool enabled)
         {
-            settings.SpaceScroll = spaceScrollItem.Checked;
-            settings.Save();
+            settings.AutomaticUpdateChecks = enabled;
+            if (enabled)
+            {
+                // Enabling the option is an explicit request for an immediate first check.
+                settings.LastUpdateCheckUtc = null;
+            }
+            SaveSettings();
+            UpdateUi();
+            if (enabled)
+            {
+                BeginAutomaticUpdateCheckIfDue();
+            }
+        }
+
+        private void RestoreKnownUpdate()
+        {
+            Version knownVersion;
+            Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            if (UpdateCheckService.TryParseReleaseTag(
+                    settings.LatestKnownVersion,
+                    out knownVersion)
+                && knownVersion.CompareTo(currentVersion) > 0)
+            {
+                menuView.SetAvailableUpdate(knownVersion);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(settings.LatestKnownVersion))
+            {
+                settings.LatestKnownVersion = string.Empty;
+                SaveSettings();
+            }
+            menuView.SetAvailableUpdate(null);
+        }
+
+        private void OpenLink(string url)
+        {
+            if (!RepositoryLinks.TryOpen(url))
+            {
+                ShowBalloon(localizer.Text(UiText.ErrorOpenLink), ToolTipIcon.Error);
+            }
+        }
+
+        private void ToggleSpaceBehavior(bool enabled)
+        {
+            settings.SpaceScroll = enabled;
+            SaveSettings();
             if (readingMode)
             {
                 hotkeys.DisableScrollingHotkeys();
                 readingMode = false;
                 SetReadingMode(true);
             }
+            UpdateUi();
         }
 
-        private ToolStripMenuItem ShortcutItem(string text, FocusShortcut shortcut)
+        private void ToggleStartup(bool enabled)
         {
-            var item = new ToolStripMenuItem(text) { Checked = settings.FocusShortcut == shortcut, Tag = shortcut };
-            item.Click += delegate
+            if (!startupRegistration.TrySetEnabled(enabled))
             {
-                settings.FocusShortcut = (FocusShortcut)item.Tag;
-                settings.Save();
-                CheckOnly(shortcutItems, item);
-                hotkeys.DisableFocusToggle();
-                nextHotkeyRetryTick = 0;
-            };
-            return item;
-        }
-
-        private ToolStripMenuItem SpeedItem(string text, ScrollSpeed speed)
-        {
-            var item = new ToolStripMenuItem(text) { Checked = settings.ScrollSpeed == speed, Tag = speed };
-            item.Click += delegate
-            {
-                settings.ScrollSpeed = (ScrollSpeed)item.Tag;
-                settings.Save();
-                CheckOnly(speedItems, item);
-            };
-            return item;
-        }
-
-        private static void CheckOnly(ToolStripMenuItem[] items, ToolStripMenuItem selected)
-        {
-            foreach (ToolStripMenuItem item in items)
-            {
-                item.Checked = ReferenceEquals(item, selected);
+                menuView.SetStartupEnabled(startupRegistration.IsEnabled);
+                ShowBalloon(
+                    localizer.Text(enabled ? UiText.ErrorStartupEnable : UiText.ErrorStartupDisable),
+                    ToolTipIcon.Error);
+                return;
             }
+            UpdateUi();
         }
 
-        private void ShowEnabledState(object sender, EventArgs e)
+        private void ChangeLanguage(string languageCode)
         {
-            ShowBalloon(
-                toolEnabled
-                    ? "The utility is enabled. Right-click the icon for settings."
-                    : "The utility is disabled. Enable it from the right-click menu.",
-                toolEnabled ? ToolTipIcon.Info : ToolTipIcon.Warning);
+            settings.LanguageCode = languageCode;
+            localizer.SetLanguage(languageCode);
+            SaveSettings();
+            menuView.ApplyLocalization(settings);
+            UpdateUi();
         }
 
-        private void UpdateMenuText()
+        private void UpdateUi()
         {
-            string mode = !toolEnabled ? "Disabled" : readingMode ? "Reading" : "Ready";
-            diagnosticModeItem.Text = readingMode
-                ? "Mode: reading (navigation keys captured)"
-                : toolEnabled ? "Mode: ready for transcript focus" : "Mode: disabled";
-            diagnosticAutomationItem.Text = composerLocator.StatusText;
-            diagnosticShortcutItem.Text = hotkeyFailureCount > 0
-                ? "Focus shortcut: registration retry " + hotkeyFailureCount
-                : "Focus shortcut: " + (hotkeys.IsFocusToggleRegistered
-                    ? hotkeys.FocusToggleText
-                    : UtilitySettings.ShortcutText(settings.FocusShortcut));
-
+            ApplicationMode mode = CurrentMode;
             string shortcut = hotkeys.IsFocusToggleRegistered
-                ? hotkeys.FocusToggleText.Replace(" (fallback)", string.Empty)
-                : hotkeyFailureCount > 0 ? "Hotkey retry" : UtilitySettings.ShortcutText(settings.FocusShortcut);
-            summaryItem.Text = mode + " · " + shortcut + " · " + composerLocator.CompactStatus;
-            readingModeItem.Checked = readingMode;
+                ? hotkeys.FocusToggleText
+                : UtilitySettings.ShortcutText(settings.FocusShortcut);
+            menuView.UpdateState(new TrayMenuState
+            {
+                Mode = mode,
+                ComposerStatus = composerLocator.Status,
+                ShortcutText = shortcut,
+                UsingFallbackShortcut = hotkeys.UsingFallbackShortcut,
+                HotkeyRetryCount = hotkeyFailureCount,
+                StartupEnabled = startupRegistration.IsEnabled
+            }, settings);
+            trayIcon.Icon = mode == ApplicationMode.Reading ? icons.Active : icons.Waiting;
+            trayIcon.Text = TooltipText(mode);
+        }
+
+        private string TooltipText(ApplicationMode mode)
+        {
+            string value = localizer.Text(
+                mode == ApplicationMode.Reading
+                    ? UiText.TooltipActive
+                    : mode == ApplicationMode.Disabled
+                        ? UiText.TooltipDisabled
+                        : UiText.TooltipWaiting);
+            return value.Length <= 63 ? value : value.Substring(0, 63);
+        }
+
+        private string LocalizeHotkeyError(HotkeyError error)
+        {
+            return error.Kind == HotkeyErrorKind.NavigationKeysUnavailable
+                ? localizer.Format(UiText.ErrorNavigationKeysUnavailable, error.Win32Error)
+                : localizer.Text(UiText.ErrorFocusShortcutsUnavailable);
+        }
+
+        private void SaveSettings()
+        {
+            if (!settings.Save())
+            {
+                ShowBalloon(localizer.Text(UiText.ErrorSettingsSave), ToolTipIcon.Warning);
+            }
         }
 
         private void ShowBalloon(string message, ToolTipIcon icon)
         {
-            trayIcon.BalloonTipTitle = "Codex Keyboard Scroll";
+            trayIcon.BalloonTipTitle = localizer.Text(UiText.AppName);
             trayIcon.BalloonTipText = message;
             trayIcon.BalloonTipIcon = icon;
             trayIcon.ShowBalloonTip(3500);
-        }
-
-        private static ToolStripMenuItem DiagnosticItem(string text)
-        {
-            return new ToolStripMenuItem(text) { Enabled = false };
         }
 
         protected override void ExitThreadCore()
@@ -459,13 +571,19 @@ namespace CodexKeyboardScroll
             disposed = true;
             pollTimer.Stop();
             focusToggleTimer.Stop();
+            updateCheckTimer.Stop();
             pollTimer.Dispose();
             focusToggleTimer.Dispose();
+            updateCheckTimer.Dispose();
             keyboardHook.Dispose();
+            updateCheckService.Dispose();
             composerLocator.Dispose();
             hotkeys.Dispose();
             trayIcon.Visible = false;
+            trayIcon.ContextMenuStrip = null;
             trayIcon.Dispose();
+            menuView.Dispose();
+            icons.Dispose();
             base.Dispose();
         }
     }
