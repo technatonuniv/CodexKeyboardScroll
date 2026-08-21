@@ -57,10 +57,12 @@
     <Compile Include="Localization\UiText.cs" />
     <Compile Include="Platform\RepositoryLinks.cs" />
     <Compile Include="Platform\StartupRegistration.cs" />
+    <Compile Include="Platform\WindowPositioning.cs" />
     <Compile Include="Presentation\AppIconSet.cs" />
     <Compile Include="Presentation\ModernMenuRenderer.cs" />
     <Compile Include="Presentation\TrayMenuView.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
+    <Compile Include="Services\UpdateCheckSchedule.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Tests\SelfTests.cs" />

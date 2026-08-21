@@ -19,6 +19,7 @@ namespace CodexKeyboardScroll
         private readonly NotifyIcon trayIcon;
         private readonly Timer pollTimer;
         private readonly Timer focusToggleTimer;
+        private readonly Timer updateCheckTimer;
 
         private bool toolEnabled = true;
         private bool readingMode;
@@ -52,10 +53,13 @@ namespace CodexKeyboardScroll
                 Text = TooltipText(ApplicationMode.Waiting),
                 Visible = true
             };
-            trayIcon.DoubleClick += ShowEnabledState;
 
             focusToggleTimer = new Timer { Interval = 20 };
             focusToggleTimer.Tick += CompleteFocusToggle;
+
+            updateCheckTimer = new Timer { Interval = 60 * 60 * 1000 };
+            updateCheckTimer.Tick += CheckAutomaticUpdates;
+            updateCheckTimer.Start();
 
             pollTimer = new Timer { Interval = 25 };
             pollTimer.Tick += Poll;
@@ -68,12 +72,14 @@ namespace CodexKeyboardScroll
                 ShowBalloon(localizer.Format(UiText.ErrorKeyboardHookUnavailable, hookError), ToolTipIcon.Warning);
             }
 
+            RestoreKnownUpdate();
             UpdateUi();
             ShowBalloon(
                 localizer.Format(
                     UiText.BalloonRunning,
                     UtilitySettings.ShortcutText(settings.FocusShortcut)),
                 ToolTipIcon.Info);
+            BeginAutomaticUpdateCheckIfDue();
         }
 
         private ApplicationMode CurrentMode
@@ -94,6 +100,7 @@ namespace CodexKeyboardScroll
             menuView.SpeedChanged += ChangeSpeed;
             menuView.SpaceScrollChanged += ToggleSpaceBehavior;
             menuView.StartupChanged += ToggleStartup;
+            menuView.AutomaticUpdateChecksChanged += ToggleAutomaticUpdateChecks;
             menuView.LanguageChanged += ChangeLanguage;
             menuView.OpenRepositoryRequested += OpenRepository;
             menuView.CheckUpdatesRequested += CheckForUpdates;
@@ -351,14 +358,47 @@ namespace CodexKeyboardScroll
             OpenLink(RepositoryLinks.LatestReleaseUrl);
         }
 
-        private async void CheckForUpdates()
+        private void CheckForUpdates()
+        {
+            BeginUpdateCheck(false);
+        }
+
+        private void CheckAutomaticUpdates(object sender, EventArgs e)
+        {
+            BeginAutomaticUpdateCheckIfDue();
+        }
+
+        private void BeginAutomaticUpdateCheckIfDue()
+        {
+            if (UpdateCheckSchedule.IsDue(
+                settings.AutomaticUpdateChecks,
+                settings.LastUpdateCheckUtc,
+                DateTime.UtcNow))
+            {
+                BeginUpdateCheck(true);
+            }
+        }
+
+        private async void BeginUpdateCheck(bool automatic)
         {
             if (updateCheckInProgress)
             {
                 return;
             }
+            if (automatic && !UpdateCheckSchedule.IsDue(
+                settings.AutomaticUpdateChecks,
+                settings.LastUpdateCheckUtc,
+                DateTime.UtcNow))
+            {
+                return;
+            }
 
             updateCheckInProgress = true;
+            if (automatic || settings.AutomaticUpdateChecks)
+            {
+                settings.LastUpdateCheckUtc = DateTime.UtcNow;
+                SaveSettings();
+            }
             menuView.SetUpdateCheckStatus(UpdateCheckStatus.Checking, null);
             Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
             UpdateCheckResult result = await updateCheckService.CheckAsync(currentVersion);
@@ -368,7 +408,56 @@ namespace CodexKeyboardScroll
             }
 
             updateCheckInProgress = false;
+            if (result.Status == UpdateCheckStatus.UpdateAvailable
+                && result.LatestVersion != null)
+            {
+                settings.LatestKnownVersion = result.LatestVersion.ToString(3);
+                SaveSettings();
+            }
+            else if (result.Status == UpdateCheckStatus.UpToDate
+                && settings.LatestKnownVersion.Length != 0)
+            {
+                settings.LatestKnownVersion = string.Empty;
+                SaveSettings();
+            }
             menuView.SetUpdateCheckStatus(result.Status, result.LatestVersion);
+        }
+
+        private void ToggleAutomaticUpdateChecks(bool enabled)
+        {
+            settings.AutomaticUpdateChecks = enabled;
+            if (enabled)
+            {
+                // Enabling the option is an explicit request for an immediate first check.
+                settings.LastUpdateCheckUtc = null;
+            }
+            SaveSettings();
+            UpdateUi();
+            if (enabled)
+            {
+                BeginAutomaticUpdateCheckIfDue();
+            }
+        }
+
+        private void RestoreKnownUpdate()
+        {
+            Version knownVersion;
+            Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            if (UpdateCheckService.TryParseReleaseTag(
+                    settings.LatestKnownVersion,
+                    out knownVersion)
+                && knownVersion.CompareTo(currentVersion) > 0)
+            {
+                menuView.SetAvailableUpdate(knownVersion);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(settings.LatestKnownVersion))
+            {
+                settings.LatestKnownVersion = string.Empty;
+                SaveSettings();
+            }
+            menuView.SetAvailableUpdate(null);
         }
 
         private void OpenLink(string url)
@@ -412,18 +501,6 @@ namespace CodexKeyboardScroll
             SaveSettings();
             menuView.ApplyLocalization(settings);
             UpdateUi();
-        }
-
-        private void ShowEnabledState()
-        {
-            ShowBalloon(
-                localizer.Text(toolEnabled ? UiText.BalloonEnabled : UiText.BalloonDisabled),
-                toolEnabled ? ToolTipIcon.Info : ToolTipIcon.Warning);
-        }
-
-        private void ShowEnabledState(object sender, EventArgs e)
-        {
-            ShowEnabledState();
         }
 
         private void UpdateUi()
@@ -494,8 +571,10 @@ namespace CodexKeyboardScroll
             disposed = true;
             pollTimer.Stop();
             focusToggleTimer.Stop();
+            updateCheckTimer.Stop();
             pollTimer.Dispose();
             focusToggleTimer.Dispose();
+            updateCheckTimer.Dispose();
             keyboardHook.Dispose();
             updateCheckService.Dispose();
             composerLocator.Dispose();

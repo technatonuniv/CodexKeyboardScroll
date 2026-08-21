@@ -12,6 +12,9 @@ namespace CodexKeyboardScroll
         internal decimal ScrollSpeedLevel = ScrollProfile.DefaultLevel;
         internal bool SpaceScroll = true;
         internal string LanguageCode = LocalizationManager.SystemLanguageCode;
+        internal bool AutomaticUpdateChecks;
+        internal DateTime? LastUpdateCheckUtc;
+        internal string LatestKnownVersion = string.Empty;
 
         private static string SettingsPath
         {
@@ -44,10 +47,11 @@ namespace CodexKeyboardScroll
             return settings;
         }
 
-        private static void Apply(UtilitySettings settings, string key, string value)
+        internal static void Apply(UtilitySettings settings, string key, string value)
         {
             FocusShortcut shortcut;
             bool flag;
+            DateTime timestamp;
             if (key.Equals("FocusShortcut", StringComparison.OrdinalIgnoreCase)
                 && Enum.TryParse(value, true, out shortcut))
             {
@@ -67,6 +71,25 @@ namespace CodexKeyboardScroll
             {
                 settings.LanguageCode = value;
             }
+            else if (key.Equals("AutomaticUpdateChecks", StringComparison.OrdinalIgnoreCase)
+                && bool.TryParse(value, out flag))
+            {
+                settings.AutomaticUpdateChecks = flag;
+            }
+            else if (key.Equals("LastUpdateCheckUtc", StringComparison.OrdinalIgnoreCase)
+                && DateTime.TryParseExact(
+                    value,
+                    "O",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out timestamp))
+            {
+                settings.LastUpdateCheckUtc = timestamp.ToUniversalTime();
+            }
+            else if (key.Equals("LatestKnownVersion", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.LatestKnownVersion = value;
+            }
         }
 
         internal bool Save()
@@ -74,13 +97,7 @@ namespace CodexKeyboardScroll
             string temporary = SettingsPath + ".tmp";
             try
             {
-                File.WriteAllLines(temporary, new[]
-                {
-                    "FocusShortcut=" + FocusShortcut,
-                    "ScrollSpeed=" + ScrollProfile.DisplayLevel(ScrollSpeedLevel),
-                    "SpaceScroll=" + SpaceScroll,
-                    "Language=" + LanguageCode
-                });
+                File.WriteAllLines(temporary, Serialize());
                 if (File.Exists(SettingsPath))
                 {
                     File.Replace(temporary, SettingsPath, null);
@@ -97,6 +114,22 @@ namespace CodexKeyboardScroll
                 catch { }
                 return false;
             }
+        }
+
+        internal string[] Serialize()
+        {
+            return new[]
+            {
+                "FocusShortcut=" + FocusShortcut,
+                "ScrollSpeed=" + ScrollProfile.DisplayLevel(ScrollSpeedLevel),
+                "SpaceScroll=" + SpaceScroll,
+                "Language=" + LanguageCode,
+                "AutomaticUpdateChecks=" + AutomaticUpdateChecks,
+                "LastUpdateCheckUtc=" + (LastUpdateCheckUtc.HasValue
+                    ? LastUpdateCheckUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+                    : string.Empty),
+                "LatestKnownVersion=" + (LatestKnownVersion ?? string.Empty)
+            };
         }
 
         internal static decimal ParseScrollSpeed(string value)

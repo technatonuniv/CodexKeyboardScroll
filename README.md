@@ -20,7 +20,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Sends mouse-wheel input to the transcript without moving the user's pointer.
 - Automatically retries hotkey registration after temporary shortcut conflicts.
 - Provides a modern, high-DPI tray menu with a 0.25–10 scroll-speed scale.
-- Checks GitHub Releases for updates only when requested from the Service menu.
+- Supports manual and opt-in daily update checks through the Service menu.
 - Includes 18 built-in interface languages and follows the Windows display language by default.
 - Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
 - Can optionally start with Windows; this is disabled by default.
@@ -65,8 +65,10 @@ Waiting · Alt+F · UIA
 - UI Automation and fallback status;
 - the utility version, which links to the project repository.
 
-The same submenu also provides a manual update check. If an update is available,
-the result links to the latest GitHub release.
+The same submenu provides a manual update check and an optional automatic check
+that runs at most once every 24 hours. Automatic checks are disabled by default.
+When an update is available, a persistent link appears at the top of the main
+menu and opens the latest GitHub release.
 
 Other menu items allow you to:
 
@@ -79,7 +81,7 @@ Other menu items allow you to:
 - optionally start the utility with Windows;
 - exit the utility.
 
-Double-clicking the tray icon only displays the current enabled/disabled state. It does not toggle the utility.
+Opening the tray menu does not display a separate enabled-state notification.
 
 The tray icon is vivid blue while reading mode is capturing navigation keys and muted gray while the utility is waiting. The executable uses the same modern icon at all standard Windows icon sizes.
 
@@ -98,9 +100,14 @@ FocusShortcut=AltF
 ScrollSpeed=5
 SpaceScroll=True
 Language=system
+AutomaticUpdateChecks=False
+LastUpdateCheckUtc=
+LatestKnownVersion=
 ```
 
 Changes made through the tray menu are applied immediately and saved atomically.
+The last-check timestamp and latest known version are maintained by the utility so
+the 24-hour schedule and update notice survive restarts.
 
 The optional startup setting is stored in the current user's standard Windows `Run` registry key instead of the portable INI file. Enabling it requires no administrator privileges, and disabling it removes the entry. The utility never enables startup by itself.
 
@@ -121,7 +128,7 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 - The utility does not modify Codex application files or Windows system settings.
 - It adds a current-user startup entry only when the user explicitly enables `Start with Windows`.
 - It does not require administrator privileges.
-- It contacts `api.github.com` only when `Check for updates` is selected. It does not perform automatic background update checks.
+- It contacts `api.github.com` after a manual request or, when explicitly enabled, at most once every 24 hours for an automatic update check.
 - It installs a low-level keyboard hook to detect the first typing key in reading mode. Key events are not logged, stored, or transmitted.
 - Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process.
 - The source code is included so the executable can be reviewed and rebuilt locally.
@@ -154,7 +161,7 @@ GitHub Actions runs the same build script for every pull request and every push 
 - `Localization` — embedded language packs, culture resolution, and English fallback.
 - `Platform` — isolated Windows integrations such as optional current-user startup.
 - `Presentation` — the modern tray menu, renderer, and icon resources.
-- `Services` — manual release-update checks and result modeling.
+- `Services` — release-update checks, persisted daily scheduling, and result modeling.
 - `Assets` — transparent source artwork and multi-size active/waiting icons.
 - `Tests` — dependency-free self-tests that run against the release executable.
 

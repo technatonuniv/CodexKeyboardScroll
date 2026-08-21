@@ -17,6 +17,8 @@ namespace CodexKeyboardScroll
             TestSettingsMigration(ref failures);
             TestLocalization(ref failures);
             TestUpdateVersionParsing(ref failures);
+            TestUpdateSchedule(ref failures);
+            TestDropDownPlacement(ref failures);
             TestTrayMenuEvents(ref failures);
             TestStartupRegistration(ref failures);
             TestIconResources(ref failures);
@@ -106,6 +108,9 @@ namespace CodexKeyboardScroll
             Check(ref failures, defaults.ScrollSpeedLevel == ScrollProfile.DefaultLevel);
             Check(ref failures, defaults.LanguageCode == LocalizationManager.SystemLanguageCode);
             Check(ref failures, defaults.SpaceScroll);
+            Check(ref failures, !defaults.AutomaticUpdateChecks);
+            Check(ref failures, !defaults.LastUpdateCheckUtc.HasValue);
+            Check(ref failures, defaults.LatestKnownVersion.Length == 0);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Slow") == 2);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Normal") == 5);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Fast") == 8);
@@ -114,6 +119,20 @@ namespace CodexKeyboardScroll
             Check(ref failures, UtilitySettings.ParseScrollSpeed("0") == 0.25m);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("99") == 10);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("invalid") == ScrollProfile.DefaultLevel);
+
+            var persisted = new UtilitySettings();
+            UtilitySettings.Apply(persisted, "AutomaticUpdateChecks", "True");
+            UtilitySettings.Apply(persisted, "LastUpdateCheckUtc", "2026-08-21T10:15:30.0000000Z");
+            UtilitySettings.Apply(persisted, "LatestKnownVersion", "2.1.0");
+            Check(ref failures, persisted.AutomaticUpdateChecks);
+            Check(ref failures, persisted.LastUpdateCheckUtc == new DateTime(
+                2026, 8, 21, 10, 15, 30, DateTimeKind.Utc));
+            Check(ref failures, persisted.LatestKnownVersion == "2.1.0");
+            string[] serialized = persisted.Serialize();
+            Check(ref failures, serialized.Contains("AutomaticUpdateChecks=True"));
+            Check(ref failures, serialized.Contains(
+                "LastUpdateCheckUtc=2026-08-21T10:15:30.0000000Z"));
+            Check(ref failures, serialized.Contains("LatestKnownVersion=2.1.0"));
         }
 
         private static void TestUpdateVersionParsing(ref int failures)
@@ -128,6 +147,48 @@ namespace CodexKeyboardScroll
                 RepositoryLinks.LatestReleaseApiUrl.StartsWith(
                     "https://api.github.com/",
                     StringComparison.Ordinal));
+            Check(ref failures, RepositoryLinks.LatestReleaseUrl.EndsWith(
+                "/releases/latest",
+                StringComparison.Ordinal));
+        }
+
+        private static void TestUpdateSchedule(ref int failures)
+        {
+            DateTime now = new DateTime(2026, 8, 21, 12, 0, 0, DateTimeKind.Utc);
+            Check(ref failures, !UpdateCheckSchedule.IsDue(false, null, now));
+            Check(ref failures, UpdateCheckSchedule.IsDue(true, null, now));
+            Check(ref failures, !UpdateCheckSchedule.IsDue(
+                true,
+                now.Add(UpdateCheckSchedule.Interval).AddMinutes(-1),
+                now.Add(UpdateCheckSchedule.Interval)));
+            Check(ref failures, UpdateCheckSchedule.IsDue(
+                true,
+                now,
+                now.Add(UpdateCheckSchedule.Interval)));
+            Check(ref failures, UpdateCheckSchedule.IsDue(true, now.AddMinutes(1), now));
+        }
+
+        private static void TestDropDownPlacement(ref int failures)
+        {
+            var workingArea = new Rectangle(0, 0, 1920, 1080);
+            var centeredOwner = new Rectangle(600, 100, 360, 500);
+            Check(ref failures, TrayMenuView.AlignedDropDownX(
+                centeredOwner,
+                320,
+                workingArea,
+                true) == centeredOwner.Right - 1);
+            Check(ref failures, TrayMenuView.AlignedDropDownX(
+                centeredOwner,
+                320,
+                workingArea,
+                false) == centeredOwner.Left - 320 + 1);
+
+            var rightEdgeOwner = new Rectangle(1700, 100, 220, 500);
+            Check(ref failures, TrayMenuView.AlignedDropDownX(
+                rightEdgeOwner,
+                320,
+                workingArea,
+                true) == rightEdgeOwner.Left - 320 + 1);
         }
 
         private static void TestTrayMenuEvents(ref int failures)
@@ -138,27 +199,44 @@ namespace CodexKeyboardScroll
             {
                 bool repositoryRequested = false;
                 bool updateRequested = false;
+                bool automaticUpdatesEnabled = false;
                 bool latestReleaseRequested = false;
                 decimal selectedSpeed = 0m;
                 view.OpenRepositoryRequested += delegate { repositoryRequested = true; };
                 view.CheckUpdatesRequested += delegate { updateRequested = true; };
+                view.AutomaticUpdateChecksChanged += delegate(bool enabled)
+                {
+                    automaticUpdatesEnabled = enabled;
+                };
                 view.OpenLatestReleaseRequested += delegate { latestReleaseRequested = true; };
                 view.SpeedChanged += delegate(decimal level) { selectedSpeed = level; };
 
-                var service = (ToolStripMenuItem)view.Menu.Items[1];
-                ((ToolStripMenuItem)service.DropDownItems[4]).PerformClick();
-                ((ToolStripMenuItem)service.DropDownItems[5]).PerformClick();
+                var service = (ToolStripMenuItem)view.Menu.Items["serviceMenu"];
+                ((ToolStripMenuItem)service.DropDownItems["versionItem"]).PerformClick();
+                ((ToolStripMenuItem)service.DropDownItems["checkUpdatesItem"]).PerformClick();
+                ((ToolStripMenuItem)service.DropDownItems["automaticUpdatesItem"]).PerformClick();
                 view.SetUpdateCheckStatus(
                     UpdateCheckStatus.UpdateAvailable,
                     new Version(2, 1, 0));
-                ((ToolStripMenuItem)service.DropDownItems[6]).PerformClick();
+                var available = (ToolStripMenuItem)view.Menu.Items["updateAvailableItem"];
+                available.PerformClick();
 
-                var speed = (ToolStripMenuItem)view.Menu.Items[7];
+                var speed = (ToolStripMenuItem)view.Menu.Items["speedMenu"];
                 ((ToolStripMenuItem)speed.DropDownItems[0]).PerformClick();
                 Check(ref failures, repositoryRequested);
                 Check(ref failures, updateRequested);
+                Check(ref failures, automaticUpdatesEnabled);
                 Check(ref failures, latestReleaseRequested);
                 Check(ref failures, selectedSpeed == 0.25m);
+                Check(ref failures, available.Available);
+                Check(ref failures, speed.DropDownItems[0].Text == "0.25");
+                Check(ref failures, speed.DropDownItems[1].Text == "0.5");
+                Check(ref failures, service.DropDownDirection == ToolStripDropDownDirection.Right);
+                Check(ref failures, service.DropDown.Padding.Top <= 2);
+                Check(ref failures, service.DropDown.Padding.Bottom <= 2);
+                Check(ref failures, service.DropDown.Margin == Padding.Empty);
+                Check(ref failures, ((ToolStripDropDownMenu)service.DropDown).ShowCheckMargin);
+                Check(ref failures, ((ToolStripDropDownMenu)speed.DropDown).ShowCheckMargin);
             }
         }
 
