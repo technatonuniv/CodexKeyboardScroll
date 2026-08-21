@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace CodexKeyboardScroll
 {
@@ -17,12 +16,15 @@ namespace CodexKeyboardScroll
         private const uint MouseMove = 0x0001;
         private const uint MouseLeftDown = 0x0002;
         private const uint MouseLeftUp = 0x0004;
-        private const uint MouseWheel = 0x0800;
         private const uint MouseVirtualDesk = 0x4000;
         private const uint MouseAbsolute = 0x8000;
         private const uint KeyExtended = 0x0001;
         private const uint KeyUp = 0x0002;
         private const uint KeyScanCode = 0x0008;
+        private const uint WmMouseWheel = 0x020A;
+        private const uint ChildSkipInvisible = 0x0001;
+        private const uint ChildSkipDisabled = 0x0002;
+        private const uint ChildSkipTransparent = 0x0004;
         private const int VirtualLeft = 76;
         private const int VirtualTop = 77;
         private const int VirtualWidth = 78;
@@ -50,9 +52,6 @@ namespace CodexKeyboardScroll
         internal static extern bool UnregisterHotKey(IntPtr window, int id);
 
         [DllImport("user32.dll")]
-        private static extern bool SetCursorPos(int x, int y);
-
-        [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int index);
 
         [DllImport("user32.dll")]
@@ -60,6 +59,15 @@ namespace CodexKeyboardScroll
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SendInput(uint count, Input[] inputs, int size);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool ScreenToClient(IntPtr window, ref PointNative point);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr ChildWindowFromPointEx(IntPtr parent, PointNative point, uint flags);
 
         internal static bool IsChatForeground()
         {
@@ -102,25 +110,33 @@ namespace CodexKeyboardScroll
         {
             IntPtr window = GetForegroundWindow();
             Rect rect;
-            PointNative original;
-            if (window == IntPtr.Zero || !GetWindowRect(window, out rect) || !GetCursorPos(out original))
+            if (window == IntPtr.Zero || !GetWindowRect(window, out rect))
             {
                 return false;
             }
 
             Point target = WindowLayout.ScrollTarget(rect);
-            if (!SetCursorPos(target.X, target.Y))
-            {
-                return false;
-            }
+            IntPtr targetWindow = DeepestChildAtPoint(window, target);
+            // WM_MOUSEWHEEL carries screen coordinates, so it can target Chromium's
+            // transcript directly without ever moving or redrawing the system cursor.
+            return PostMessage(
+                targetWindow,
+                WmMouseWheel,
+                PackWheelWParam(wheelDelta),
+                PackScreenPoint(target));
+        }
 
-            // Chromium routes wheel input to the element under the pointer. Restore the
-            // original pointer immediately so keyboard scrolling does not move the mouse.
-            Input wheel = MouseInput(MouseWheel, 0, 0, unchecked((uint)wheelDelta));
-            uint sent = SendInput(1, new[] { wheel }, Marshal.SizeOf(typeof(Input)));
-            Thread.Sleep(1);
-            SetCursorPos(original.X, original.Y);
-            return sent == 1;
+        internal static IntPtr PackWheelWParam(int wheelDelta)
+        {
+            uint highWord = (uint)unchecked((ushort)(short)wheelDelta) << 16;
+            return new IntPtr(unchecked((int)highWord));
+        }
+
+        internal static IntPtr PackScreenPoint(Point point)
+        {
+            uint packed = unchecked((ushort)point.X)
+                | ((uint)unchecked((ushort)point.Y) << 16);
+            return new IntPtr(unchecked((int)packed));
         }
 
         internal static bool FocusTranscript()
@@ -160,6 +176,30 @@ namespace CodexKeyboardScroll
         private static bool IsKeyDown(int virtualKey)
         {
             return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+        }
+
+        private static IntPtr DeepestChildAtPoint(IntPtr root, Point screenPoint)
+        {
+            IntPtr current = root;
+            for (int depth = 0; depth < 12; depth++)
+            {
+                var clientPoint = new PointNative { X = screenPoint.X, Y = screenPoint.Y };
+                if (!ScreenToClient(current, ref clientPoint))
+                {
+                    break;
+                }
+
+                IntPtr child = ChildWindowFromPointEx(
+                    current,
+                    clientPoint,
+                    ChildSkipInvisible | ChildSkipDisabled | ChildSkipTransparent);
+                if (child == IntPtr.Zero || child == current)
+                {
+                    break;
+                }
+                current = child;
+            }
+            return current;
         }
 
         private static bool FocusTarget(bool composer, KeyboardStroke? replay)

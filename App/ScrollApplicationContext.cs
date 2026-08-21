@@ -49,7 +49,7 @@ namespace CodexKeyboardScroll
             diagnosticsMenu.DropDownItems.Add(diagnosticModeItem);
             diagnosticsMenu.DropDownItems.Add(diagnosticShortcutItem);
             diagnosticsMenu.DropDownItems.Add(diagnosticAutomationItem);
-            diagnosticsMenu.DropDownItems.Add(DiagnosticItem("Version: 1.4.0"));
+            diagnosticsMenu.DropDownItems.Add(DiagnosticItem("Version: 1.4.1"));
 
             enabledItem = new ToolStripMenuItem("Utility enabled", null, ToggleEnabled)
             {
