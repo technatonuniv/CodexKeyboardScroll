@@ -4,6 +4,8 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-21
+
 ### Added
 
 - Added quarter-speed (`0.25`) and half-speed (`0.5`) scrolling with exact ratios relative to level 1.
@@ -54,6 +56,8 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 - First public release.
 
+[Unreleased]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.4.1...v2.0.0
 [1.4.1]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/technatonuniv/CodexKeyboardScroll/releases/tag/v1.3.0
