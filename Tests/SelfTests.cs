@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 
 namespace CodexKeyboardScroll
 {
@@ -12,6 +13,10 @@ namespace CodexKeyboardScroll
             TestTypingKeys(ref failures);
             TestShortcutLabels(ref failures);
             TestScrollProfile(ref failures);
+            TestSettingsMigration(ref failures);
+            TestLocalization(ref failures);
+            TestStartupRegistration(ref failures);
+            TestIconResources(ref failures);
             TestWheelMessagePacking(ref failures);
             return failures;
         }
@@ -59,11 +64,74 @@ namespace CodexKeyboardScroll
 
         private static void TestScrollProfile(ref int failures)
         {
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, ScrollSpeed.Slow) == 80);
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineDown, ScrollSpeed.Normal) == -120);
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, ScrollSpeed.Fast) == 240);
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageUp, ScrollSpeed.Normal) == 840);
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageDown, ScrollSpeed.Fast) == -1200);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 1) == 30);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineDown, 5) == -120);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 10) == 540);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageUp, 5) == 840);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageDown, 10) == -3240);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0) == 30);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 11) == 540);
+
+            int previous = 0;
+            for (int level = ScrollProfile.MinimumLevel; level <= ScrollProfile.MaximumLevel; level++)
+            {
+                int current = ScrollProfile.WheelDelta(ScrollCommand.LineUp, level);
+                Check(ref failures, current > previous);
+                previous = current;
+            }
+        }
+
+        private static void TestSettingsMigration(ref int failures)
+        {
+            var defaults = new UtilitySettings();
+            Check(ref failures, defaults.ScrollSpeedLevel == ScrollProfile.DefaultLevel);
+            Check(ref failures, defaults.LanguageCode == LocalizationManager.SystemLanguageCode);
+            Check(ref failures, defaults.SpaceScroll);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("Slow") == 2);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("Normal") == 5);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("Fast") == 8);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("0") == 1);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("99") == 10);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("invalid") == ScrollProfile.DefaultLevel);
+        }
+
+        private static void TestLocalization(ref int failures)
+        {
+            var localizer = new LocalizationManager("en");
+            string error;
+            Check(ref failures, localizer.ValidateAll(out error));
+            Check(ref failures, localizer.Languages.Count() >= 18);
+
+            localizer.SetLanguage("ru");
+            Check(ref failures, localizer.Text(UiText.MenuExit) == "Выход");
+            localizer.SetLanguage("zh-CN");
+            Check(ref failures, localizer.EffectiveLanguageCode == "zh-Hans");
+            localizer.SetLanguage("unknown");
+            Check(ref failures, localizer.EffectiveLanguageCode == "en");
+            localizer.SetLanguage(LocalizationManager.SystemLanguageCode);
+            Check(ref failures, localizer.RequestedLanguageCode == LocalizationManager.SystemLanguageCode);
+        }
+
+        private static void TestStartupRegistration(ref int failures)
+        {
+            const string path = @"C:\Tools\CodexKeyboardScroll.exe";
+            string command = StartupRegistration.CommandForExecutable(path);
+            Check(ref failures, command == "\"" + path + "\"");
+            Check(ref failures, StartupRegistration.IsCommandForExecutable(command, path));
+            Check(ref failures, !StartupRegistration.IsCommandForExecutable(
+                "\"C:\\Other\\CodexKeyboardScroll.exe\"",
+                path));
+        }
+
+        private static void TestIconResources(ref int failures)
+        {
+            using (var icons = new AppIconSet())
+            {
+                Check(ref failures, icons.Active != null);
+                Check(ref failures, icons.Waiting != null);
+                Check(ref failures, icons.Active.Width >= 16);
+                Check(ref failures, icons.Waiting.Width >= 16);
+            }
         }
 
         private static void TestWheelMessagePacking(ref int failures)

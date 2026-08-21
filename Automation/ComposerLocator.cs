@@ -11,28 +11,20 @@ namespace CodexKeyboardScroll
         private IntPtr cachedWindow;
         private int lastRefreshTick;
         private int refreshRunning;
+        private bool hasCompletedRefresh;
         private bool disposed;
 
-        internal string StatusText
+        internal ComposerStatus Status
         {
             get
             {
                 lock (sync)
                 {
-                    return composer == null
-                        ? "UI Automation: coordinate fallback active"
-                        : "UI Automation: composer found";
-                }
-            }
-        }
-
-        internal string CompactStatus
-        {
-            get
-            {
-                lock (sync)
-                {
-                    return composer == null ? "Fallback" : "UIA";
+                    return !hasCompletedRefresh
+                        ? ComposerStatus.Locating
+                        : composer == null
+                            ? ComposerStatus.CoordinateFallback
+                            : ComposerStatus.Found;
                 }
             }
         }
@@ -122,6 +114,7 @@ namespace CodexKeyboardScroll
             {
                 cachedWindow = window;
                 composer = found;
+                hasCompletedRefresh = true;
             }
         }
 
@@ -192,6 +185,7 @@ namespace CodexKeyboardScroll
             {
                 composer = null;
                 cachedWindow = IntPtr.Zero;
+                hasCompletedRefresh = false;
             }
         }
     }

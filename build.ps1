@@ -29,6 +29,15 @@ $namespace.AddNamespace('msb', 'http://schemas.microsoft.com/developer/msbuild/2
 $sources = $project.SelectNodes('//msb:Compile', $namespace) | ForEach-Object {
     Join-Path $projectRoot $_.Include
 }
+$languageResources = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Localization\Resources') -Filter '*.lang' |
+    Sort-Object Name |
+    ForEach-Object {
+        "/resource:$($_.FullName),CodexKeyboardScroll.Localization.Resources.$($_.Name)"
+    }
+$iconResources = @(
+    "/resource:$(Join-Path $projectRoot 'Assets\CodexKeyboardScroll.ico'),CodexKeyboardScroll.Assets.Active.ico",
+    "/resource:$(Join-Path $projectRoot 'Assets\CodexKeyboardScroll.Waiting.ico'),CodexKeyboardScroll.Assets.Waiting.ico"
+)
 
 $arguments = @(
     '/nologo',
@@ -38,6 +47,8 @@ $arguments = @(
     '/warn:4',
     '/warnaserror+',
     "/out:$executable",
+    "/win32icon:$(Join-Path $projectRoot 'Assets\CodexKeyboardScroll.ico')",
+    "/win32manifest:$(Join-Path $projectRoot 'app.manifest')",
     "/reference:$(Join-Path $framework 'System.dll')",
     "/reference:$(Join-Path $framework 'System.Core.dll')",
     "/reference:$(Join-Path $framework 'System.Drawing.dll')",
@@ -45,7 +56,7 @@ $arguments = @(
     "/reference:$(Join-Path $wpf 'UIAutomationClient.dll')",
     "/reference:$(Join-Path $wpf 'UIAutomationTypes.dll')",
     "/reference:$(Join-Path $wpf 'WindowsBase.dll')"
-) + $sources
+) + $languageResources + $iconResources + $sources
 
 & $compiler $arguments
 if ($LASTEXITCODE -ne 0) {

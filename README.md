@@ -19,6 +19,10 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Locates the composer through Windows UI Automation, with a coordinate-based fallback.
 - Sends mouse-wheel input to the transcript without moving the user's pointer.
 - Automatically retries hotkey registration after temporary shortcut conflicts.
+- Provides a modern, high-DPI tray menu with a 1–10 scroll-speed scale.
+- Includes 18 built-in interface languages and follows the Windows display language by default.
+- Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
+- Can optionally start with Windows; this is disabled by default.
 - Stores settings in a portable INI file next to the executable.
 
 ## Requirements
@@ -47,10 +51,10 @@ The default focus shortcut is `Alt+F`. Available alternatives are `Ctrl+Alt+F` a
 
 ## Tray menu
 
-The top line is a compact, read-only summary such as:
+The larger high-DPI menu uses modern spacing, colors, and state indicators. Its top line is a compact, read-only summary such as:
 
 ```text
-Ready · Alt+F · UIA
+Waiting · Alt+F · UIA
 ```
 
 `Status and diagnostics` contains detailed read-only information about:
@@ -65,11 +69,21 @@ Other menu items allow you to:
 - enable or disable the utility;
 - enable reading mode manually;
 - choose the focus shortcut;
-- select slow, normal, or fast scrolling;
+- select a scroll speed from 1 (comfortable continuous reading) to 10 (very fast), with 5 as the default;
 - choose whether `Space` scrolls the transcript or starts typing;
+- choose the interface language or follow the Windows display language;
+- optionally start the utility with Windows;
 - exit the utility.
 
 Double-clicking the tray icon only displays the current enabled/disabled state. It does not toggle the utility.
+
+The tray icon is vivid blue while reading mode is capturing navigation keys and muted gray while the utility is waiting. The executable uses the same modern icon at all standard Windows icon sizes.
+
+## Languages
+
+The interface includes Arabic, Chinese (Simplified and Traditional), Dutch, English, French, German, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese (Brazil), Russian, Spanish, Turkish, and Ukrainian.
+
+`System default` follows the current Windows display language and falls back to English when no matching language pack is available. Language changes are applied immediately without restarting the utility.
 
 ## Settings
 
@@ -77,11 +91,14 @@ Settings are stored in `CodexKeyboardScroll.settings.ini` next to the executable
 
 ```ini
 FocusShortcut=AltF
-ScrollSpeed=Normal
+ScrollSpeed=5
 SpaceScroll=True
+Language=system
 ```
 
 Changes made through the tray menu are applied immediately and saved atomically.
+
+The optional startup setting is stored in the current user's standard Windows `Run` registry key instead of the portable INI file. Enabling it requires no administrator privileges, and disabling it removes the entry. The utility never enables startup by itself.
 
 ## Focus and scrolling behavior
 
@@ -98,7 +115,7 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 ## Privacy and security
 
 - The utility does not modify Codex application files or Windows system settings.
-- It does not add itself to startup.
+- It adds a current-user startup entry only when the user explicitly enables `Start with Windows`.
 - It does not require administrator privileges.
 - It installs a low-level keyboard hook to detect the first typing key in reading mode. Key events are not logged, stored, or transmitted.
 - Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process.
@@ -129,13 +146,17 @@ GitHub Actions runs the same build script for every pull request and every push 
 - `Configuration` — portable settings loading and atomic persistence.
 - `Domain` — commands, settings values, and scroll profiles.
 - `Input` — hotkeys, keyboard hook, Win32 input, and window-layout heuristics.
+- `Localization` — embedded language packs, culture resolution, and English fallback.
+- `Platform` — isolated Windows integrations such as optional current-user startup.
+- `Presentation` — the modern tray menu, renderer, and icon resources.
+- `Assets` — transparent source artwork and multi-size active/waiting icons.
 - `Tests` — dependency-free self-tests that run against the release executable.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history and [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change.
 
 ## Removal
 
-Choose `Exit` from the tray menu, then delete the utility directory. No additional cleanup is required.
+If `Start with Windows` is enabled, turn it off first so the utility removes its startup entry. Then choose `Exit` and delete the utility directory.
 
 ## Project status
 

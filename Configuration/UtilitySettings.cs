@@ -8,8 +8,9 @@ namespace CodexKeyboardScroll
         private const string FileName = "CodexKeyboardScroll.settings.ini";
 
         internal FocusShortcut FocusShortcut = FocusShortcut.AltF;
-        internal ScrollSpeed ScrollSpeed = ScrollSpeed.Normal;
+        internal int ScrollSpeedLevel = ScrollProfile.DefaultLevel;
         internal bool SpaceScroll = true;
+        internal string LanguageCode = LocalizationManager.SystemLanguageCode;
 
         private static string SettingsPath
         {
@@ -45,26 +46,29 @@ namespace CodexKeyboardScroll
         private static void Apply(UtilitySettings settings, string key, string value)
         {
             FocusShortcut shortcut;
-            ScrollSpeed speed;
             bool flag;
             if (key.Equals("FocusShortcut", StringComparison.OrdinalIgnoreCase)
                 && Enum.TryParse(value, true, out shortcut))
             {
                 settings.FocusShortcut = shortcut;
             }
-            else if (key.Equals("ScrollSpeed", StringComparison.OrdinalIgnoreCase)
-                && Enum.TryParse(value, true, out speed))
+            else if (key.Equals("ScrollSpeed", StringComparison.OrdinalIgnoreCase))
             {
-                settings.ScrollSpeed = speed;
+                settings.ScrollSpeedLevel = ParseScrollSpeed(value);
             }
             else if (key.Equals("SpaceScroll", StringComparison.OrdinalIgnoreCase)
                 && bool.TryParse(value, out flag))
             {
                 settings.SpaceScroll = flag;
             }
+            else if (key.Equals("Language", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                settings.LanguageCode = value;
+            }
         }
 
-        internal void Save()
+        internal bool Save()
         {
             string temporary = SettingsPath + ".tmp";
             try
@@ -72,8 +76,9 @@ namespace CodexKeyboardScroll
                 File.WriteAllLines(temporary, new[]
                 {
                     "FocusShortcut=" + FocusShortcut,
-                    "ScrollSpeed=" + ScrollSpeed,
-                    "SpaceScroll=" + SpaceScroll
+                    "ScrollSpeed=" + ScrollSpeedLevel,
+                    "SpaceScroll=" + SpaceScroll,
+                    "Language=" + LanguageCode
                 });
                 if (File.Exists(SettingsPath))
                 {
@@ -83,12 +88,28 @@ namespace CodexKeyboardScroll
                 {
                     File.Move(temporary, SettingsPath);
                 }
+                return true;
             }
             catch
             {
                 try { File.Delete(temporary); }
                 catch { }
+                return false;
             }
+        }
+
+        internal static int ParseScrollSpeed(string value)
+        {
+            int level;
+            if (int.TryParse(value, out level))
+            {
+                return ScrollProfile.ClampLevel(level);
+            }
+
+            // Preserve settings written by versions earlier than 2.0.
+            if (value.Equals("Slow", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (value.Equals("Fast", StringComparison.OrdinalIgnoreCase)) return 8;
+            return ScrollProfile.DefaultLevel;
         }
 
         internal static string ShortcutText(FocusShortcut shortcut)

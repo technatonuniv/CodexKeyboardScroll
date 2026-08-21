@@ -2,6 +2,20 @@
 
 All notable changes to Codex Keyboard Scroll are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Added 18 embedded interface languages with automatic Windows-language selection, immediate switching, English fallback, and completeness validation.
+- Added modern multi-size application icons with visually distinct active and waiting tray states.
+- Added optional current-user Windows startup registration, disabled by default.
+
+### Changed
+
+- Rebuilt the tray menu with larger typography, high-DPI support, modern spacing, colors, and state indicators.
+- Replaced the three scroll-speed presets with a monotonic 1–10 scale that defaults to level 5 and migrates existing settings.
+- Separated localization, presentation, application state, and Windows startup integration into independently testable components.
+
 ## [1.4.1] - 2026-08-21
 
 ### Fixed

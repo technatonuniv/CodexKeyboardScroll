@@ -18,15 +18,12 @@ namespace CodexKeyboardScroll
         private readonly HashSet<uint> suppressedKeyUps = new HashSet<uint>();
         private IntPtr hook;
 
-        internal KeyboardHook(Func<KeyboardStroke, bool> handler, out string error)
+        internal KeyboardHook(Func<KeyboardStroke, bool> handler, out int win32Error)
         {
             this.handler = handler;
             hookProc = HookCallback;
             hook = SetWindowsHookEx(WhKeyboardLl, hookProc, GetModuleHandle(null), 0);
-            error = hook == IntPtr.Zero
-                ? "Could not enable automatic composer focus (Win32 "
-                    + Marshal.GetLastWin32Error() + ")."
-                : null;
+            win32Error = hook == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
         }
 
         private IntPtr HookCallback(int code, IntPtr wParam, IntPtr lParam)
