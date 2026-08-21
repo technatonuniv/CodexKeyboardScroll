@@ -4,6 +4,12 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Rebuilt update checks around a fresh HTTP client per attempt and added one retry for transient failures.
+- Preserved actionable failure categories instead of collapsing every update error into an unexplained message.
+- Added tray notifications for user-initiated update checks so progress and results remain visible after the menu closes.
+
 ## [2.0.0] - 2026-08-21
 
 ### Added
