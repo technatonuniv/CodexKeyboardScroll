@@ -29,6 +29,15 @@ namespace CodexKeyboardScroll
         Reading
     }
 
+    internal enum UpdateCheckStatus
+    {
+        Idle,
+        Checking,
+        UpToDate,
+        UpdateAvailable,
+        Failed
+    }
+
     internal enum HotkeyErrorKind
     {
         None,

@@ -12,11 +12,13 @@ namespace CodexKeyboardScroll
         private readonly ContextMenuStrip menu;
         private readonly Font menuFont;
         private readonly ToolStripMenuItem summaryItem;
-        private readonly ToolStripMenuItem diagnosticsMenu;
+        private readonly ToolStripMenuItem serviceMenu;
         private readonly ToolStripMenuItem diagnosticModeItem;
         private readonly ToolStripMenuItem diagnosticShortcutItem;
         private readonly ToolStripMenuItem diagnosticAutomationItem;
         private readonly ToolStripMenuItem diagnosticVersionItem;
+        private readonly ToolStripMenuItem checkUpdatesItem;
+        private readonly ToolStripMenuItem updateStatusItem;
         private readonly ToolStripMenuItem enabledItem;
         private readonly ToolStripMenuItem readingModeItem;
         private readonly ToolStripMenuItem shortcutMenu;
@@ -29,6 +31,8 @@ namespace CodexKeyboardScroll
         private readonly ToolStripMenuItem[] shortcutItems;
         private readonly ToolStripMenuItem[] speedItems;
         private readonly List<ToolStripMenuItem> languageItems = new List<ToolStripMenuItem>();
+        private UpdateCheckStatus updateCheckStatus;
+        private Version latestVersion;
         private bool suppressEvents;
 
         internal TrayMenuView(LocalizationManager localizer, UtilitySettings settings, bool startupEnabled)
@@ -50,17 +54,22 @@ namespace CodexKeyboardScroll
             };
 
             summaryItem = DiagnosticItem();
-            diagnosticsMenu = new ToolStripMenuItem();
+            serviceMenu = new ToolStripMenuItem();
             diagnosticModeItem = DiagnosticItem();
             diagnosticShortcutItem = DiagnosticItem();
             diagnosticAutomationItem = DiagnosticItem();
-            diagnosticVersionItem = DiagnosticItem();
-            diagnosticsMenu.DropDownItems.AddRange(new ToolStripItem[]
+            diagnosticVersionItem = new ToolStripMenuItem();
+            checkUpdatesItem = new ToolStripMenuItem();
+            updateStatusItem = new ToolStripMenuItem { Visible = false };
+            serviceMenu.DropDownItems.AddRange(new ToolStripItem[]
             {
                 diagnosticModeItem,
                 diagnosticShortcutItem,
                 diagnosticAutomationItem,
-                diagnosticVersionItem
+                new ToolStripSeparator(),
+                diagnosticVersionItem,
+                checkUpdatesItem,
+                updateStatusItem
             });
 
             enabledItem = CheckItem(true);
@@ -75,10 +84,11 @@ namespace CodexKeyboardScroll
             shortcutMenu.DropDownItems.AddRange(shortcutItems);
 
             speedMenu = new ToolStripMenuItem();
-            speedItems = new ToolStripMenuItem[ScrollProfile.MaximumLevel];
-            for (int level = ScrollProfile.MinimumLevel; level <= ScrollProfile.MaximumLevel; level++)
+            speedItems = new ToolStripMenuItem[ScrollProfile.SupportedLevels.Count];
+            for (int index = 0; index < ScrollProfile.SupportedLevels.Count; index++)
             {
-                speedItems[level - 1] = SpeedItem(level, settings.ScrollSpeedLevel);
+                decimal level = ScrollProfile.SupportedLevels[index];
+                speedItems[index] = SpeedItem(level, settings.ScrollSpeedLevel);
             }
             speedMenu.DropDownItems.AddRange(speedItems);
 
@@ -99,7 +109,7 @@ namespace CodexKeyboardScroll
             menu.Items.AddRange(new ToolStripItem[]
             {
                 summaryItem,
-                diagnosticsMenu,
+                serviceMenu,
                 new ToolStripSeparator(),
                 enabledItem,
                 readingModeItem,
@@ -117,6 +127,22 @@ namespace CodexKeyboardScroll
             readingModeItem.Click += delegate { Raise(ReadingModeChanged, readingModeItem.Checked); };
             spaceScrollItem.Click += delegate { Raise(SpaceScrollChanged, spaceScrollItem.Checked); };
             startupItem.Click += delegate { Raise(StartupChanged, startupItem.Checked); };
+            diagnosticVersionItem.Click += delegate
+            {
+                if (OpenRepositoryRequested != null) OpenRepositoryRequested();
+            };
+            checkUpdatesItem.Click += delegate
+            {
+                if (CheckUpdatesRequested != null) CheckUpdatesRequested();
+            };
+            updateStatusItem.Click += delegate
+            {
+                if (updateCheckStatus == UpdateCheckStatus.UpdateAvailable
+                    && OpenLatestReleaseRequested != null)
+                {
+                    OpenLatestReleaseRequested();
+                }
+            };
             exitItem.Click += delegate { if (ExitRequested != null) ExitRequested(); };
             menu.Opening += delegate { if (Opening != null) Opening(); };
             ApplyItemStyle(menu.Items);
@@ -128,10 +154,13 @@ namespace CodexKeyboardScroll
         internal event Action<bool> EnabledChanged;
         internal event Action<bool> ReadingModeChanged;
         internal event Action<FocusShortcut> ShortcutChanged;
-        internal event Action<int> SpeedChanged;
+        internal event Action<decimal> SpeedChanged;
         internal event Action<bool> SpaceScrollChanged;
         internal event Action<bool> StartupChanged;
         internal event Action<string> LanguageChanged;
+        internal event Action OpenRepositoryRequested;
+        internal event Action CheckUpdatesRequested;
+        internal event Action OpenLatestReleaseRequested;
         internal event Action ExitRequested;
         internal event Action Opening;
 
@@ -139,11 +168,13 @@ namespace CodexKeyboardScroll
         {
             suppressEvents = true;
             menu.RightToLeft = localizer.IsRightToLeft ? RightToLeft.Yes : RightToLeft.No;
-            diagnosticsMenu.Text = localizer.Text(UiText.MenuStatusDiagnostics);
+            serviceMenu.Text = localizer.Text(UiText.MenuService);
             enabledItem.Text = localizer.Text(UiText.MenuUtilityEnabled);
             readingModeItem.Text = localizer.Text(UiText.MenuReadingMode);
             shortcutMenu.Text = localizer.Text(UiText.MenuFocusShortcut);
-            speedMenu.Text = localizer.Format(UiText.MenuScrollSpeed, settings.ScrollSpeedLevel);
+            speedMenu.Text = localizer.Format(
+                UiText.MenuScrollSpeed,
+                ScrollProfile.DisplayLevel(settings.ScrollSpeedLevel));
             spaceScrollItem.Text = localizer.Text(UiText.MenuSpaceScroll);
             startupItem.Text = localizer.Text(UiText.MenuStartWithWindows);
             languageMenu.Text = localizer.Text(UiText.MenuLanguage);
@@ -154,10 +185,12 @@ namespace CodexKeyboardScroll
             diagnosticVersionItem.Text = localizer.Format(
                 UiText.DiagnosticVersion,
                 Assembly.GetExecutingAssembly().GetName().Version.ToString(3));
+            checkUpdatesItem.Text = localizer.Text(UiText.MenuCheckForUpdates);
+            ApplyUpdateStatus();
 
-            for (int level = ScrollProfile.MinimumLevel; level <= ScrollProfile.MaximumLevel; level++)
+            for (int index = 0; index < ScrollProfile.SupportedLevels.Count; index++)
             {
-                speedItems[level - 1].Text = SpeedLabel(level);
+                speedItems[index].Text = SpeedLabel(ScrollProfile.SupportedLevels[index]);
             }
             foreach (ToolStripMenuItem item in languageItems)
             {
@@ -175,7 +208,9 @@ namespace CodexKeyboardScroll
             readingModeItem.Enabled = state.Mode != ApplicationMode.Disabled;
             spaceScrollItem.Checked = settings.SpaceScroll;
             startupItem.Checked = state.StartupEnabled;
-            speedMenu.Text = localizer.Format(UiText.MenuScrollSpeed, settings.ScrollSpeedLevel);
+            speedMenu.Text = localizer.Format(
+                UiText.MenuScrollSpeed,
+                ScrollProfile.DisplayLevel(settings.ScrollSpeedLevel));
             CheckOnly(shortcutItems, settings.FocusShortcut);
             CheckOnly(speedItems, settings.ScrollSpeedLevel);
             SetLanguageChecks(settings.LanguageCode);
@@ -206,6 +241,13 @@ namespace CodexKeyboardScroll
             startupItem.Checked = enabled;
         }
 
+        internal void SetUpdateCheckStatus(UpdateCheckStatus status, Version version)
+        {
+            updateCheckStatus = status;
+            latestVersion = version;
+            ApplyUpdateStatus();
+        }
+
         public void Dispose()
         {
             menu.Dispose();
@@ -228,7 +270,7 @@ namespace CodexKeyboardScroll
             return item;
         }
 
-        private ToolStripMenuItem SpeedItem(int level, int selected)
+        private ToolStripMenuItem SpeedItem(decimal level, decimal selected)
         {
             var item = new ToolStripMenuItem
             {
@@ -254,21 +296,57 @@ namespace CodexKeyboardScroll
             return item;
         }
 
-        private string SpeedLabel(int level)
+        private string SpeedLabel(decimal level)
         {
-            if (level == ScrollProfile.MinimumLevel)
+            string display = ScrollProfile.DisplayLevel(level);
+            if (level == 0.25m)
             {
-                return level + " — " + localizer.Text(UiText.SpeedComfortable);
+                return display + " — " + localizer.Text(UiText.SpeedQuarter);
+            }
+            if (level == 0.5m)
+            {
+                return display + " — " + localizer.Text(UiText.SpeedHalf);
+            }
+            if (level == 1m)
+            {
+                return display + " — " + localizer.Text(UiText.SpeedComfortable);
             }
             if (level == ScrollProfile.DefaultLevel)
             {
-                return level + " — " + localizer.Text(UiText.SpeedBalanced);
+                return display + " — " + localizer.Text(UiText.SpeedBalanced);
             }
             if (level == ScrollProfile.MaximumLevel)
             {
-                return level + " — " + localizer.Text(UiText.SpeedVeryFast);
+                return display + " — " + localizer.Text(UiText.SpeedVeryFast);
             }
-            return level.ToString();
+            return display;
+        }
+
+        private void ApplyUpdateStatus()
+        {
+            checkUpdatesItem.Enabled = updateCheckStatus != UpdateCheckStatus.Checking;
+            checkUpdatesItem.Text = updateCheckStatus == UpdateCheckStatus.Checking
+                ? localizer.Text(UiText.UpdateChecking)
+                : localizer.Text(UiText.MenuCheckForUpdates);
+
+            updateStatusItem.Visible = updateCheckStatus == UpdateCheckStatus.UpToDate
+                || updateCheckStatus == UpdateCheckStatus.UpdateAvailable
+                || updateCheckStatus == UpdateCheckStatus.Failed;
+            updateStatusItem.Enabled = updateCheckStatus == UpdateCheckStatus.UpdateAvailable;
+            if (updateCheckStatus == UpdateCheckStatus.UpdateAvailable && latestVersion != null)
+            {
+                updateStatusItem.Text = localizer.Format(
+                    UiText.UpdateAvailable,
+                    latestVersion.ToString(3));
+            }
+            else if (updateCheckStatus == UpdateCheckStatus.UpToDate)
+            {
+                updateStatusItem.Text = localizer.Text(UiText.UpdateUpToDate);
+            }
+            else if (updateCheckStatus == UpdateCheckStatus.Failed)
+            {
+                updateStatusItem.Text = localizer.Text(UiText.UpdateCheckFailed);
+            }
         }
 
         private string ModeText(ApplicationMode mode)
@@ -332,6 +410,10 @@ namespace CodexKeyboardScroll
                 }
                 item.Padding = new Padding(14, 8, 16, 8);
                 item.Margin = new Padding(4, 2, 4, 2);
+                item.TextAlign = item.RightToLeft == RightToLeft.Yes
+                    ? ContentAlignment.MiddleRight
+                    : ContentAlignment.MiddleLeft;
+                item.ImageAlign = ContentAlignment.MiddleCenter;
                 var menuItem = item as ToolStripMenuItem;
                 if (menuItem != null && menuItem.HasDropDownItems)
                 {

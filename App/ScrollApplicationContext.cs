@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace CodexKeyboardScroll
@@ -9,6 +10,7 @@ namespace CodexKeyboardScroll
         private readonly UtilitySettings settings;
         private readonly LocalizationManager localizer;
         private readonly StartupRegistration startupRegistration;
+        private readonly UpdateCheckService updateCheckService;
         private readonly ComposerLocator composerLocator;
         private readonly HotkeyWindow hotkeys;
         private readonly KeyboardHook keyboardHook;
@@ -28,6 +30,7 @@ namespace CodexKeyboardScroll
         private int lastHotkeyWarningTick;
         private int hotkeyFailureCount;
         private bool disposed;
+        private bool updateCheckInProgress;
 
         internal ScrollApplicationContext()
         {
@@ -35,6 +38,7 @@ namespace CodexKeyboardScroll
             localizer = new LocalizationManager(settings.LanguageCode);
             settings.LanguageCode = localizer.RequestedLanguageCode;
             startupRegistration = new StartupRegistration(Application.ExecutablePath);
+            updateCheckService = new UpdateCheckService();
             composerLocator = new ComposerLocator();
             hotkeys = new HotkeyWindow(HandleScrollHotkey, QueueFocusToggle);
             icons = new AppIconSet();
@@ -91,6 +95,9 @@ namespace CodexKeyboardScroll
             menuView.SpaceScrollChanged += ToggleSpaceBehavior;
             menuView.StartupChanged += ToggleStartup;
             menuView.LanguageChanged += ChangeLanguage;
+            menuView.OpenRepositoryRequested += OpenRepository;
+            menuView.CheckUpdatesRequested += CheckForUpdates;
+            menuView.OpenLatestReleaseRequested += OpenLatestRelease;
             menuView.ExitRequested += ExitThread;
             menuView.Opening += UpdateUi;
         }
@@ -327,11 +334,49 @@ namespace CodexKeyboardScroll
             UpdateUi();
         }
 
-        private void ChangeSpeed(int level)
+        private void ChangeSpeed(decimal level)
         {
-            settings.ScrollSpeedLevel = ScrollProfile.ClampLevel(level);
+            settings.ScrollSpeedLevel = ScrollProfile.NormalizeLevel(level);
             SaveSettings();
             UpdateUi();
+        }
+
+        private void OpenRepository()
+        {
+            OpenLink(RepositoryLinks.RepositoryUrl);
+        }
+
+        private void OpenLatestRelease()
+        {
+            OpenLink(RepositoryLinks.LatestReleaseUrl);
+        }
+
+        private async void CheckForUpdates()
+        {
+            if (updateCheckInProgress)
+            {
+                return;
+            }
+
+            updateCheckInProgress = true;
+            menuView.SetUpdateCheckStatus(UpdateCheckStatus.Checking, null);
+            Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            UpdateCheckResult result = await updateCheckService.CheckAsync(currentVersion);
+            if (disposed)
+            {
+                return;
+            }
+
+            updateCheckInProgress = false;
+            menuView.SetUpdateCheckStatus(result.Status, result.LatestVersion);
+        }
+
+        private void OpenLink(string url)
+        {
+            if (!RepositoryLinks.TryOpen(url))
+            {
+                ShowBalloon(localizer.Text(UiText.ErrorOpenLink), ToolTipIcon.Error);
+            }
         }
 
         private void ToggleSpaceBehavior(bool enabled)
@@ -452,6 +497,7 @@ namespace CodexKeyboardScroll
             pollTimer.Dispose();
             focusToggleTimer.Dispose();
             keyboardHook.Dispose();
+            updateCheckService.Dispose();
             composerLocator.Dispose();
             hotkeys.Dispose();
             trayIcon.Visible = false;

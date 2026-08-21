@@ -19,7 +19,8 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Locates the composer through Windows UI Automation, with a coordinate-based fallback.
 - Sends mouse-wheel input to the transcript without moving the user's pointer.
 - Automatically retries hotkey registration after temporary shortcut conflicts.
-- Provides a modern, high-DPI tray menu with a 1–10 scroll-speed scale.
+- Provides a modern, high-DPI tray menu with a 0.25–10 scroll-speed scale.
+- Checks GitHub Releases for updates only when requested from the Service menu.
 - Includes 18 built-in interface languages and follows the Windows display language by default.
 - Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
 - Can optionally start with Windows; this is disabled by default.
@@ -57,19 +58,22 @@ The larger high-DPI menu uses modern spacing, colors, and state indicators. Its 
 Waiting · Alt+F · UIA
 ```
 
-`Status and diagnostics` contains detailed read-only information about:
+`Service` contains detailed read-only information about:
 
 - the current mode;
 - the registered focus shortcut;
 - UI Automation and fallback status;
-- the utility version.
+- the utility version, which links to the project repository.
+
+The same submenu also provides a manual update check. If an update is available,
+the result links to the latest GitHub release.
 
 Other menu items allow you to:
 
 - enable or disable the utility;
 - enable reading mode manually;
 - choose the focus shortcut;
-- select a scroll speed from 1 (comfortable continuous reading) to 10 (very fast), with 5 as the default;
+- select a scroll speed from 0.25 to 10, with 5 as the default; 0.5 is exactly half the level-1 speed and 0.25 is exactly one quarter;
 - choose whether `Space` scrolls the transcript or starts typing;
 - choose the interface language or follow the Windows display language;
 - optionally start the utility with Windows;
@@ -117,6 +121,7 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 - The utility does not modify Codex application files or Windows system settings.
 - It adds a current-user startup entry only when the user explicitly enables `Start with Windows`.
 - It does not require administrator privileges.
+- It contacts `api.github.com` only when `Check for updates` is selected. It does not perform automatic background update checks.
 - It installs a low-level keyboard hook to detect the first typing key in reading mode. Key events are not logged, stored, or transmitted.
 - Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process.
 - The source code is included so the executable can be reviewed and rebuilt locally.
@@ -149,6 +154,7 @@ GitHub Actions runs the same build script for every pull request and every push 
 - `Localization` — embedded language packs, culture resolution, and English fallback.
 - `Platform` — isolated Windows integrations such as optional current-user startup.
 - `Presentation` — the modern tray menu, renderer, and icon resources.
+- `Services` — manual release-update checks and result modeling.
 - `Assets` — transparent source artwork and multi-size active/waiting icons.
 - `Tests` — dependency-free self-tests that run against the release executable.
 

@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.Windows.Forms;
 
 namespace CodexKeyboardScroll
 {
@@ -15,6 +16,8 @@ namespace CodexKeyboardScroll
             TestScrollProfile(ref failures);
             TestSettingsMigration(ref failures);
             TestLocalization(ref failures);
+            TestUpdateVersionParsing(ref failures);
+            TestTrayMenuEvents(ref failures);
             TestStartupRegistration(ref failures);
             TestIconResources(ref failures);
             TestWheelMessagePacking(ref failures);
@@ -64,16 +67,32 @@ namespace CodexKeyboardScroll
 
         private static void TestScrollProfile(ref int failures)
         {
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 1) == 30);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0.25m) == 8);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0.5m) == 16);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 1m) == 32);
+            Check(ref failures,
+                ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0.5m) * 2
+                    == ScrollProfile.WheelDelta(ScrollCommand.LineUp, 1m));
+            Check(ref failures,
+                ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0.25m) * 4
+                    == ScrollProfile.WheelDelta(ScrollCommand.LineUp, 1m));
+            Check(ref failures,
+                ScrollProfile.WheelDelta(ScrollCommand.PageUp, 0.5m) * 2
+                    == ScrollProfile.WheelDelta(ScrollCommand.PageUp, 1m));
+            Check(ref failures,
+                ScrollProfile.WheelDelta(ScrollCommand.PageUp, 0.25m) * 4
+                    == ScrollProfile.WheelDelta(ScrollCommand.PageUp, 1m));
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineDown, 5) == -120);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 10) == 540);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageUp, 5) == 840);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageDown, 10) == -3240);
-            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0) == 30);
+            Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 0) == 8);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, 11) == 540);
+            Check(ref failures, ScrollProfile.DisplayLevel(0.25m) == "0.25");
+            Check(ref failures, ScrollProfile.DisplayLevel(0.5m) == "0.5");
 
             int previous = 0;
-            for (int level = ScrollProfile.MinimumLevel; level <= ScrollProfile.MaximumLevel; level++)
+            foreach (decimal level in ScrollProfile.SupportedLevels)
             {
                 int current = ScrollProfile.WheelDelta(ScrollCommand.LineUp, level);
                 Check(ref failures, current > previous);
@@ -90,9 +109,57 @@ namespace CodexKeyboardScroll
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Slow") == 2);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Normal") == 5);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("Fast") == 8);
-            Check(ref failures, UtilitySettings.ParseScrollSpeed("0") == 1);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("0.25") == 0.25m);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("0.5") == 0.5m);
+            Check(ref failures, UtilitySettings.ParseScrollSpeed("0") == 0.25m);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("99") == 10);
             Check(ref failures, UtilitySettings.ParseScrollSpeed("invalid") == ScrollProfile.DefaultLevel);
+        }
+
+        private static void TestUpdateVersionParsing(ref int failures)
+        {
+            Version version;
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1.0", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("2.0.1+build.4", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 0, 1)));
+            Check(ref failures, !UpdateCheckService.TryParseReleaseTag("release", out version));
+            Check(ref failures,
+                RepositoryLinks.LatestReleaseApiUrl.StartsWith(
+                    "https://api.github.com/",
+                    StringComparison.Ordinal));
+        }
+
+        private static void TestTrayMenuEvents(ref int failures)
+        {
+            var settings = new UtilitySettings();
+            var localizer = new LocalizationManager("en");
+            using (var view = new TrayMenuView(localizer, settings, false))
+            {
+                bool repositoryRequested = false;
+                bool updateRequested = false;
+                bool latestReleaseRequested = false;
+                decimal selectedSpeed = 0m;
+                view.OpenRepositoryRequested += delegate { repositoryRequested = true; };
+                view.CheckUpdatesRequested += delegate { updateRequested = true; };
+                view.OpenLatestReleaseRequested += delegate { latestReleaseRequested = true; };
+                view.SpeedChanged += delegate(decimal level) { selectedSpeed = level; };
+
+                var service = (ToolStripMenuItem)view.Menu.Items[1];
+                ((ToolStripMenuItem)service.DropDownItems[4]).PerformClick();
+                ((ToolStripMenuItem)service.DropDownItems[5]).PerformClick();
+                view.SetUpdateCheckStatus(
+                    UpdateCheckStatus.UpdateAvailable,
+                    new Version(2, 1, 0));
+                ((ToolStripMenuItem)service.DropDownItems[6]).PerformClick();
+
+                var speed = (ToolStripMenuItem)view.Menu.Items[7];
+                ((ToolStripMenuItem)speed.DropDownItems[0]).PerformClick();
+                Check(ref failures, repositoryRequested);
+                Check(ref failures, updateRequested);
+                Check(ref failures, latestReleaseRequested);
+                Check(ref failures, selectedSpeed == 0.25m);
+            }
         }
 
         private static void TestLocalization(ref int failures)

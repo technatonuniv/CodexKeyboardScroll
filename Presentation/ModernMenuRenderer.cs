@@ -35,7 +35,10 @@ namespace CodexKeyboardScroll
 
         protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
         {
-            Rectangle box = new Rectangle(e.ImageRectangle.Left + 2, e.ImageRectangle.Top + 2, 18, 18);
+            const int boxSize = 18;
+            int x = e.ImageRectangle.Left + ((e.ImageRectangle.Width - boxSize) / 2);
+            int y = (e.Item.Height - boxSize) / 2;
+            Rectangle box = new Rectangle(x, y, boxSize, boxSize);
             using (GraphicsPath path = RoundedRectangle(box, 5))
             using (var brush = new SolidBrush(Accent))
             using (var pen = new Pen(Color.White, 2.2f))
@@ -49,6 +52,35 @@ namespace CodexKeyboardScroll
                     new Point(box.Left + 15, box.Top + 5)
                 });
             }
+        }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            // ToolStrip's text rectangle shifts with check and submenu margins. Centering
+            // against the full row keeps every label aligned regardless of those margins.
+            bool rightToLeft = e.ToolStrip.RightToLeft == RightToLeft.Yes;
+            TextFormatFlags flags = TextFormatFlags.VerticalCenter
+                | TextFormatFlags.SingleLine
+                | TextFormatFlags.NoPadding
+                | TextFormatFlags.EndEllipsis
+                | (rightToLeft
+                    ? TextFormatFlags.Right | TextFormatFlags.RightToLeft
+                    : TextFormatFlags.Left);
+            Color textColor = e.Item.Enabled
+                ? e.Item.ForeColor
+                : SystemColors.GrayText;
+            Rectangle textBounds = new Rectangle(
+                e.TextRectangle.X,
+                0,
+                e.TextRectangle.Width,
+                e.Item.Height);
+            TextRenderer.DrawText(
+                e.Graphics,
+                e.Text,
+                e.TextFont,
+                textBounds,
+                textColor,
+                flags);
         }
 
         protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)

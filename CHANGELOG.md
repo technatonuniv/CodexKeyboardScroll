@@ -6,14 +6,19 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ### Added
 
+- Added quarter-speed (`0.25`) and half-speed (`0.5`) scrolling with exact ratios relative to level 1.
+- Added a clickable version entry that opens the project repository.
+- Added an on-demand GitHub Releases update check to the Service menu, with no automatic network requests.
 - Added 18 embedded interface languages with automatic Windows-language selection, immediate switching, English fallback, and completeness validation.
 - Added modern multi-size application icons with visually distinct active and waiting tray states.
 - Added optional current-user Windows startup registration, disabled by default.
 
 ### Changed
 
+- Renamed `Status and diagnostics` to `Service` and grouped diagnostics, version information, and update tools there.
+- Vertically centered menu text and check indicators with explicit high-DPI-aware rendering.
 - Rebuilt the tray menu with larger typography, high-DPI support, modern spacing, colors, and state indicators.
-- Replaced the three scroll-speed presets with a monotonic 1–10 scale that defaults to level 5 and migrates existing settings.
+- Replaced the three scroll-speed presets with a monotonic 0.25–10 scale that defaults to level 5 and migrates existing settings.
 - Separated localization, presentation, application state, and Windows startup integration into independently testable components.
 
 ## [1.4.1] - 2026-08-21

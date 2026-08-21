@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 
 namespace CodexKeyboardScroll
@@ -8,7 +9,7 @@ namespace CodexKeyboardScroll
         private const string FileName = "CodexKeyboardScroll.settings.ini";
 
         internal FocusShortcut FocusShortcut = FocusShortcut.AltF;
-        internal int ScrollSpeedLevel = ScrollProfile.DefaultLevel;
+        internal decimal ScrollSpeedLevel = ScrollProfile.DefaultLevel;
         internal bool SpaceScroll = true;
         internal string LanguageCode = LocalizationManager.SystemLanguageCode;
 
@@ -76,7 +77,7 @@ namespace CodexKeyboardScroll
                 File.WriteAllLines(temporary, new[]
                 {
                     "FocusShortcut=" + FocusShortcut,
-                    "ScrollSpeed=" + ScrollSpeedLevel,
+                    "ScrollSpeed=" + ScrollProfile.DisplayLevel(ScrollSpeedLevel),
                     "SpaceScroll=" + SpaceScroll,
                     "Language=" + LanguageCode
                 });
@@ -98,17 +99,21 @@ namespace CodexKeyboardScroll
             }
         }
 
-        internal static int ParseScrollSpeed(string value)
+        internal static decimal ParseScrollSpeed(string value)
         {
-            int level;
-            if (int.TryParse(value, out level))
+            decimal level;
+            if (decimal.TryParse(
+                value,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out level))
             {
-                return ScrollProfile.ClampLevel(level);
+                return ScrollProfile.NormalizeLevel(level);
             }
 
             // Preserve settings written by versions earlier than 2.0.
-            if (value.Equals("Slow", StringComparison.OrdinalIgnoreCase)) return 2;
-            if (value.Equals("Fast", StringComparison.OrdinalIgnoreCase)) return 8;
+            if (value.Equals("Slow", StringComparison.OrdinalIgnoreCase)) return 2m;
+            if (value.Equals("Fast", StringComparison.OrdinalIgnoreCase)) return 8m;
             return ScrollProfile.DefaultLevel;
         }
 
