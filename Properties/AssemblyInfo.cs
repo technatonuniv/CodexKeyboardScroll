@@ -5,5 +5,5 @@ using System.Reflection;
 [assembly: AssemblyCompany("technatonuniv")]
 [assembly: AssemblyProduct("Codex Keyboard Scroll")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 technatonuniv")]
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.4.1.0")]
+[assembly: AssemblyFileVersion("1.4.1.0")]

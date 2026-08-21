@@ -87,7 +87,7 @@ Changes made through the tray menu are applied immediately and saved atomically.
 
 The utility refreshes the Codex accessibility tree on a background worker and caches the composer. Composer focus is verified after every UI Automation focus request. If accessibility lookup is unavailable or the interface changes, a coordinate-based click is used as a fallback.
 
-Scrolling deliberately uses mouse-wheel input. Chromium routes wheel input to the element under the pointer, so the utility briefly targets the transcript and restores the original pointer position immediately.
+Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the Codex child window at the transcript coordinates, so the system pointer never moves or flickers.
 
 Manual click classification still uses the click position. If an unusual window layout is not classified correctly, use the focus shortcut or enable reading mode from the tray menu.
 

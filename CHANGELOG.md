@@ -2,6 +2,12 @@
 
 All notable changes to Codex Keyboard Scroll are documented here.
 
+## [1.4.1] - 2026-08-21
+
+### Fixed
+
+- Eliminated pointer movement and flicker during keyboard scrolling by targeting wheel messages directly at the transcript.
+
 ## [1.4.0] - 2026-08-21
 
 ### Changed
@@ -26,5 +32,6 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 - First public release.
 
+[1.4.1]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/technatonuniv/CodexKeyboardScroll/releases/tag/v1.3.0

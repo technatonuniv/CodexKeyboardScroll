@@ -12,6 +12,7 @@ namespace CodexKeyboardScroll
             TestTypingKeys(ref failures);
             TestShortcutLabels(ref failures);
             TestScrollProfile(ref failures);
+            TestWheelMessagePacking(ref failures);
             return failures;
         }
 
@@ -63,6 +64,19 @@ namespace CodexKeyboardScroll
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.LineUp, ScrollSpeed.Fast) == 240);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageUp, ScrollSpeed.Normal) == 840);
             Check(ref failures, ScrollProfile.WheelDelta(ScrollCommand.PageDown, ScrollSpeed.Fast) == -1200);
+        }
+
+        private static void TestWheelMessagePacking(ref int failures)
+        {
+            Check(ref failures, LowBits(NativeInput.PackWheelWParam(120)) == 0x00780000);
+            Check(ref failures, LowBits(NativeInput.PackWheelWParam(-120)) == 0xFF880000);
+            Check(ref failures, LowBits(NativeInput.PackScreenPoint(new Point(17, 34))) == 0x00220011);
+            Check(ref failures, LowBits(NativeInput.PackScreenPoint(new Point(-10, -20))) == 0xFFECFFF6);
+        }
+
+        private static uint LowBits(IntPtr value)
+        {
+            return unchecked((uint)value.ToInt64());
         }
 
         private static bool Contains(NativeInput.Rect rect, Point point)
