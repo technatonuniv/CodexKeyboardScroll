@@ -2,6 +2,9 @@
 *.exe
 *.pdb
 *.tmp
+artifacts/
+bin/
+obj/
 
 # Per-user settings
 CodexKeyboardScroll.settings.ini

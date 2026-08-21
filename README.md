@@ -17,7 +17,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Switches between the transcript and composer with one configurable shortcut.
 - Automatically returns focus to the composer when a letter, number, or punctuation key is pressed in reading mode, while preserving the first typed character.
 - Locates the composer through Windows UI Automation, with a coordinate-based fallback.
-- Validates UI Automation scrolling and falls back to mouse-wheel input when Chromium reports success without moving the transcript.
+- Sends mouse-wheel input to the transcript without moving the user's pointer.
 - Automatically retries hotkey registration after temporary shortcut conflicts.
 - Stores settings in a portable INI file next to the executable.
 
@@ -83,11 +83,11 @@ SpaceScroll=True
 
 Changes made through the tray menu are applied immediately and saved atomically.
 
-## UI Automation and fallback behavior
+## Focus and scrolling behavior
 
-The utility refreshes the Codex accessibility tree on a background worker and caches the composer and scroll container. Composer focus is verified after every UI Automation focus request.
+The utility refreshes the Codex accessibility tree on a background worker and caches the composer. Composer focus is verified after every UI Automation focus request. If accessibility lookup is unavailable or the interface changes, a coordinate-based click is used as a fallback.
 
-Chromium may expose a `ScrollPattern` while failing to update its reported scroll position. The utility treats UI Automation scrolling as successful only after detecting a real position change. Otherwise, it uses the proven mouse-wheel fallback and restores the original pointer position.
+Scrolling deliberately uses mouse-wheel input. Chromium routes wheel input to the element under the pointer, so the utility briefly targets the transcript and restores the original pointer position immediately.
 
 Manual click classification still uses the click position. If an unusual window layout is not classified correctly, use the focus shortcut or enable reading mode from the tray menu.
 
@@ -106,35 +106,32 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 
 ## Build from source
 
-Compile with the .NET Framework 4.8 C# compiler included with Windows:
+The repository includes a classic .NET Framework project and a build script that does not require a separate .NET SDK installation. From PowerShell:
 
 ```powershell
-$wpf = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF'
-$csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-
-& $csc `
-  /nologo `
-  /target:winexe `
-  /optimize+ `
-  /platform:x64 `
-  /warn:4 `
-  /reference:System.Windows.Forms.dll `
-  /reference:System.Drawing.dll `
-  /reference:"$wpf\UIAutomationClient.dll" `
-  /reference:"$wpf\UIAutomationTypes.dll" `
-  /reference:"$wpf\WindowsBase.dll" `
-  /out:CodexKeyboardScroll.exe `
-  CodexKeyboardScroll.cs
+.\build.ps1
 ```
 
-Run the built-in self-test:
+The script compiles with warnings treated as errors, runs the built-in self-tests, and writes the executable to `artifacts\CodexKeyboardScroll.exe`. It also prints the SHA-256 hash.
+
+Visual Studio Build Tools users can build the project directly:
 
 ```powershell
-.\CodexKeyboardScroll.exe --self-test
-$LASTEXITCODE
+msbuild .\CodexKeyboardScroll.csproj /p:Configuration=Release /p:Platform=x64
 ```
 
-An exit code of `0` indicates that the built-in checks passed.
+GitHub Actions runs the same build script for every pull request and every push to `main`.
+
+## Project structure
+
+- `App` — application lifecycle, tray menu, and reading-mode coordination.
+- `Automation` — background UI Automation lookup and verified composer focus.
+- `Configuration` — portable settings loading and atomic persistence.
+- `Domain` — commands, settings values, and scroll profiles.
+- `Input` — hotkeys, keyboard hook, Win32 input, and window-layout heuristics.
+- `Tests` — dependency-free self-tests that run against the release executable.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change.
 
 ## Removal
 
