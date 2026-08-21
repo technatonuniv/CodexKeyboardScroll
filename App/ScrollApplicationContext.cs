@@ -12,7 +12,7 @@ namespace CodexKeyboardScroll
         private readonly KeyboardHook keyboardHook;
         private readonly NotifyIcon trayIcon;
         private readonly Timer pollTimer;
-        private readonly Timer deferredFocusTimer;
+        private readonly Timer focusToggleTimer;
 
         private readonly ToolStripMenuItem enabledItem;
         private readonly ToolStripMenuItem readingModeItem;
@@ -39,7 +39,7 @@ namespace CodexKeyboardScroll
         {
             settings = UtilitySettings.Load();
             composerLocator = new ComposerLocator();
-            hotkeys = new HotkeyWindow(HandleScrollHotkey, ToggleFocusMode);
+            hotkeys = new HotkeyWindow(HandleScrollHotkey, QueueFocusToggle);
 
             summaryItem = DiagnosticItem("Ready · Alt+F · UIA");
             diagnosticModeItem = DiagnosticItem("Mode: ready for transcript focus");
@@ -108,12 +108,8 @@ namespace CodexKeyboardScroll
             };
             trayIcon.DoubleClick += ShowEnabledState;
 
-            deferredFocusTimer = new Timer { Interval = 60 };
-            deferredFocusTimer.Tick += delegate
-            {
-                deferredFocusTimer.Stop();
-                FocusComposer();
-            };
+            focusToggleTimer = new Timer { Interval = 20 };
+            focusToggleTimer.Tick += CompleteFocusToggle;
 
             pollTimer = new Timer { Interval = 25 };
             pollTimer.Tick += Poll;
@@ -261,11 +257,34 @@ namespace CodexKeyboardScroll
             NativeInput.ScrollForeground(ScrollProfile.WheelDelta(command, settings.ScrollSpeed));
         }
 
-        private void ToggleFocusMode()
+        private void QueueFocusToggle()
         {
             if (!toolEnabled || !NativeInput.IsChatForeground())
             {
                 return;
+            }
+
+            focusToggleTimer.Start();
+        }
+
+        private void CompleteFocusToggle(object sender, EventArgs e)
+        {
+            if (!toolEnabled || !NativeInput.IsChatForeground())
+            {
+                focusToggleTimer.Stop();
+                return;
+            }
+            if (!NativeInput.AreFocusKeysReleased())
+            {
+                return;
+            }
+
+            focusToggleTimer.Stop();
+            // Alt release can leave Chromium in menu mnemonic mode even though the
+            // modifier is no longer down. Escape dismisses that mode before focusing.
+            if (hotkeys.FocusToggleUsesAlt)
+            {
+                NativeInput.DismissMenuMode();
             }
 
             if (!readingMode)
@@ -276,10 +295,7 @@ namespace CodexKeyboardScroll
             }
 
             SetReadingMode(false);
-            // Chromium may undo focus set while Alt is still held. Deferring the request
-            // until after the shortcut is released makes the composer focus stable.
-            deferredFocusTimer.Stop();
-            deferredFocusTimer.Start();
+            FocusComposer();
         }
 
         private void FocusComposer()
@@ -442,9 +458,9 @@ namespace CodexKeyboardScroll
             }
             disposed = true;
             pollTimer.Stop();
-            deferredFocusTimer.Stop();
+            focusToggleTimer.Stop();
             pollTimer.Dispose();
-            deferredFocusTimer.Dispose();
+            focusToggleTimer.Dispose();
             keyboardHook.Dispose();
             composerLocator.Dispose();
             hotkeys.Dispose();

@@ -144,6 +144,19 @@ namespace CodexKeyboardScroll
             return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == (uint)inputs.Length;
         }
 
+        internal static bool AreFocusKeysReleased()
+        {
+            return !IsKeyDown(0x10) && !IsKeyDown(0x11)
+                && !IsKeyDown(0x12) && !IsKeyDown(0x46);
+        }
+
+        internal static bool DismissMenuMode()
+        {
+            var escape = new KeyboardStroke(0x1B, 0, 0);
+            Input[] inputs = { KeyboardInput(escape, false), KeyboardInput(escape, true) };
+            return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == (uint)inputs.Length;
+        }
+
         private static bool IsKeyDown(int virtualKey)
         {
             return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;

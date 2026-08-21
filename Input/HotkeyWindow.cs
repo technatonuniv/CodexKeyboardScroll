@@ -40,6 +40,7 @@ namespace CodexKeyboardScroll
         }
 
         internal bool IsFocusToggleRegistered { get; private set; }
+        internal bool FocusToggleUsesAlt { get; private set; }
         internal string FocusToggleText { get; private set; }
 
         internal bool EnableFocusToggle(FocusShortcut preferred, out string error)
@@ -63,6 +64,7 @@ namespace CodexKeyboardScroll
                 if (NativeInput.RegisterHotKey(Handle, FocusToggleId, modifiers, (uint)Keys.F))
                 {
                     IsFocusToggleRegistered = true;
+                    FocusToggleUsesAlt = UtilitySettings.ShortcutUsesAlt(shortcut);
                     FocusToggleText = UtilitySettings.ShortcutText(shortcut)
                         + (shortcut == preferred ? string.Empty : " (fallback)");
                     error = null;
@@ -80,6 +82,7 @@ namespace CodexKeyboardScroll
             {
                 NativeInput.UnregisterHotKey(Handle, FocusToggleId);
                 IsFocusToggleRegistered = false;
+                FocusToggleUsesAlt = false;
             }
         }
 

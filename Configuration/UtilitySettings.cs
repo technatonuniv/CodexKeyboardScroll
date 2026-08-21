@@ -100,5 +100,10 @@ namespace CodexKeyboardScroll
                 default: return "Alt+F";
             }
         }
+
+        internal static bool ShortcutUsesAlt(FocusShortcut shortcut)
+        {
+            return shortcut != FocusShortcut.CtrlShiftF;
+        }
     }
 }

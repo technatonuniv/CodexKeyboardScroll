@@ -12,6 +12,10 @@ All notable changes to Codex Keyboard Scroll are documented here.
 - Expanded dependency-free self-tests for layout classification, typing-key detection, shortcut labels, and scroll profiles.
 - Added contributor guidance and documented the source layout.
 
+### Fixed
+
+- Prevented menu accelerators from remaining active after an Alt-based focus shortcut.
+
 ### Preserved
 
 - Windows 10 and .NET Framework 4.8 compatibility.

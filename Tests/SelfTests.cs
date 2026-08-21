@@ -51,6 +51,9 @@ namespace CodexKeyboardScroll
             Check(ref failures, UtilitySettings.ShortcutText(FocusShortcut.AltF) == "Alt+F");
             Check(ref failures, UtilitySettings.ShortcutText(FocusShortcut.CtrlAltF) == "Ctrl+Alt+F");
             Check(ref failures, UtilitySettings.ShortcutText(FocusShortcut.CtrlShiftF) == "Ctrl+Shift+F");
+            Check(ref failures, UtilitySettings.ShortcutUsesAlt(FocusShortcut.AltF));
+            Check(ref failures, UtilitySettings.ShortcutUsesAlt(FocusShortcut.CtrlAltF));
+            Check(ref failures, !UtilitySettings.ShortcutUsesAlt(FocusShortcut.CtrlShiftF));
         }
 
         private static void TestScrollProfile(ref int failures)
