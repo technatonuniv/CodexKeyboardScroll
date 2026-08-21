@@ -1,0 +1,7 @@
+# Build artifacts
+*.exe
+*.pdb
+*.tmp
+
+# Per-user settings
+CodexKeyboardScroll.settings.ini
