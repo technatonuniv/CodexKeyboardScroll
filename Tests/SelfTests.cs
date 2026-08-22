@@ -1,6 +1,13 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Reflection;
+using System.Runtime.Versioning;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace CodexKeyboardScroll
@@ -17,6 +24,8 @@ namespace CodexKeyboardScroll
             TestSettingsMigration(ref failures);
             TestLocalization(ref failures);
             TestUpdateVersionParsing(ref failures);
+            TestUpdateRuntime(ref failures);
+            TestUpdateCheckResults(ref failures);
             TestUpdateSchedule(ref failures);
             TestDropDownPlacement(ref failures);
             TestTrayMenuEvents(ref failures);
@@ -140,6 +149,13 @@ namespace CodexKeyboardScroll
             Version version;
             Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1.0", out version));
             Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, version.ToString(3) == "2.1.0");
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1-beta", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, version.ToString(3) == "2.1.0");
+            Check(ref failures, version.CompareTo(new Version(2, 0, 1, 0)) > 0);
             Check(ref failures, UpdateCheckService.TryParseReleaseTag("2.0.1+build.4", out version));
             Check(ref failures, version != null && version.Equals(new Version(2, 0, 1)));
             Check(ref failures, !UpdateCheckService.TryParseReleaseTag("release", out version));
@@ -150,6 +166,82 @@ namespace CodexKeyboardScroll
             Check(ref failures, RepositoryLinks.LatestReleaseUrl.EndsWith(
                 "/releases/latest",
                 StringComparison.Ordinal));
+        }
+
+        private static void TestUpdateCheckResults(ref int failures)
+        {
+            int attempts = 0;
+            using (var service = new UpdateCheckService(delegate
+            {
+                attempts++;
+                return new StubHttpHandler(delegate
+                {
+                    if (attempts == 1)
+                    {
+                        return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+                    }
+                    return JsonResponse("{\"tag_name\":\"v2.0.0\"}");
+                });
+            }))
+            {
+                UpdateCheckResult result = service.CheckAsync(
+                    new Version(2, 0, 1, 0)).GetAwaiter().GetResult();
+                Check(ref failures, attempts == 2);
+                Check(ref failures, result.Status == UpdateCheckStatus.UpToDate);
+                Check(ref failures, result.LatestVersion.Equals(new Version(2, 0, 0)));
+                Check(ref failures, result.FailureKind == UpdateCheckFailureKind.None);
+            }
+
+            attempts = 0;
+            using (var service = new UpdateCheckService(delegate
+            {
+                attempts++;
+                return new StubHttpHandler(delegate
+                {
+                    return new HttpResponseMessage(HttpStatusCode.Forbidden);
+                });
+            }))
+            {
+                UpdateCheckResult result = service.CheckAsync(
+                    new Version(2, 0, 1, 0)).GetAwaiter().GetResult();
+                Check(ref failures, attempts == 1);
+                Check(ref failures, result.Status == UpdateCheckStatus.Failed);
+                Check(ref failures, result.FailureKind == UpdateCheckFailureKind.HttpResponse);
+                Check(ref failures, result.HttpStatusCode == 403);
+                Check(ref failures, !result.IsTransient);
+            }
+
+            var secureFailure = new HttpRequestException(
+                "request failed",
+                new WebException(
+                    "secure channel failed",
+                    WebExceptionStatus.SecureChannelFailure));
+            Check(ref failures,
+                UpdateCheckService.ClassifyRequestFailure(secureFailure)
+                    == UpdateCheckFailureKind.SecureConnection);
+            Check(ref failures,
+                UpdateCheckService.ClassifyRequestFailure(new HttpRequestException("offline"))
+                    == UpdateCheckFailureKind.Network);
+        }
+
+        private static void TestUpdateRuntime(ref int failures)
+        {
+            var target = (TargetFrameworkAttribute)Assembly.GetExecutingAssembly()
+                .GetCustomAttributes(typeof(TargetFrameworkAttribute), false)
+                .SingleOrDefault();
+            Check(ref failures, target != null);
+            Check(ref failures,
+                target != null && target.FrameworkName == ".NETFramework,Version=v4.8");
+            Check(ref failures,
+                ServicePointManager.SecurityProtocol == SecurityProtocolType.SystemDefault);
+        }
+
+        private static HttpResponseMessage JsonResponse(string json)
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
         }
 
         private static void TestUpdateSchedule(ref int failures)
@@ -237,6 +329,17 @@ namespace CodexKeyboardScroll
                 Check(ref failures, service.DropDown.Margin == Padding.Empty);
                 Check(ref failures, ((ToolStripDropDownMenu)service.DropDown).ShowCheckMargin);
                 Check(ref failures, ((ToolStripDropDownMenu)speed.DropDown).ShowCheckMargin);
+
+                var status = (ToolStripMenuItem)service.DropDownItems["updateStatusItem"];
+                view.SetUpdateCheckStatus(
+                    UpdateCheckStatus.Failed,
+                    null,
+                    "HTTP 403");
+                Check(ref failures, status.Text.Contains("HTTP 403"));
+                view.SetUpdateCheckStatus(
+                    UpdateCheckStatus.UpToDate,
+                    new Version(2, 0, 1));
+                Check(ref failures, status.Text.Contains("2.0.1"));
             }
         }
 
@@ -303,6 +406,23 @@ namespace CodexKeyboardScroll
             if (!condition)
             {
                 failures++;
+            }
+        }
+
+        private sealed class StubHttpHandler : HttpMessageHandler
+        {
+            private readonly Func<HttpResponseMessage> responseFactory;
+
+            internal StubHttpHandler(Func<HttpResponseMessage> responseFactory)
+            {
+                this.responseFactory = responseFactory;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(responseFactory());
             }
         }
     }

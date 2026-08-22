@@ -67,6 +67,10 @@ Waiting · Alt+F · UIA
 
 The same submenu provides a manual update check and an optional automatic check
 that runs at most once every 24 hours. Automatic checks are disabled by default.
+Manual checks show both progress and the final result as tray notifications, so
+the Service menu does not need to remain open. Transient network and server
+failures are retried once; persistent failures identify the error category in
+both the notification and the Service menu.
 When an update is available, a persistent link appears at the top of the main
 menu and opens the latest GitHub release.
 

@@ -38,6 +38,17 @@ namespace CodexKeyboardScroll
         Failed
     }
 
+    internal enum UpdateCheckFailureKind
+    {
+        None,
+        Timeout,
+        Network,
+        SecureConnection,
+        HttpResponse,
+        InvalidResponse,
+        Unexpected
+    }
+
     internal enum HotkeyErrorKind
     {
         None,

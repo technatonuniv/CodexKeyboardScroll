@@ -37,6 +37,7 @@ namespace CodexKeyboardScroll
         private UpdateCheckStatus updateCheckStatus;
         private Version latestVersion;
         private Version availableVersion;
+        private string updateFailureReason;
         private bool suppressEvents;
 
         internal TrayMenuView(LocalizationManager localizer, UtilitySettings settings, bool startupEnabled)
@@ -272,10 +273,14 @@ namespace CodexKeyboardScroll
             startupItem.Checked = enabled;
         }
 
-        internal void SetUpdateCheckStatus(UpdateCheckStatus status, Version version)
+        internal void SetUpdateCheckStatus(
+            UpdateCheckStatus status,
+            Version version,
+            string failureReason = null)
         {
             updateCheckStatus = status;
             latestVersion = version;
+            updateFailureReason = failureReason;
             if (status == UpdateCheckStatus.UpdateAvailable && version != null)
             {
                 availableVersion = version;
@@ -378,11 +383,15 @@ namespace CodexKeyboardScroll
             }
             else if (updateCheckStatus == UpdateCheckStatus.UpToDate)
             {
-                updateStatusItem.Text = localizer.Text(UiText.UpdateUpToDate);
+                updateStatusItem.Text = latestVersion == null
+                    ? localizer.Text(UiText.UpdateUpToDate)
+                    : localizer.Format(UiText.UpdateUpToDate, latestVersion.ToString(3));
             }
             else if (updateCheckStatus == UpdateCheckStatus.Failed)
             {
-                updateStatusItem.Text = localizer.Text(UiText.UpdateCheckFailed);
+                updateStatusItem.Text = localizer.Format(
+                    UiText.UpdateCheckFailed,
+                    updateFailureReason ?? localizer.Text(UiText.UpdateFailureUnexpected));
             }
             ApplyAvailableUpdate();
         }

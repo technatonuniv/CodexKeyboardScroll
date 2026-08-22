@@ -79,7 +79,7 @@ namespace CodexKeyboardScroll
                     UiText.BalloonRunning,
                     UtilitySettings.ShortcutText(settings.FocusShortcut)),
                 ToolTipIcon.Info);
-            BeginAutomaticUpdateCheckIfDue();
+            BeginAutomaticUpdateCheckIfDue(false);
         }
 
         private ApplicationMode CurrentMode
@@ -360,29 +360,33 @@ namespace CodexKeyboardScroll
 
         private void CheckForUpdates()
         {
-            BeginUpdateCheck(false);
+            BeginUpdateCheck(false, true);
         }
 
         private void CheckAutomaticUpdates(object sender, EventArgs e)
         {
-            BeginAutomaticUpdateCheckIfDue();
+            BeginAutomaticUpdateCheckIfDue(false);
         }
 
-        private void BeginAutomaticUpdateCheckIfDue()
+        private void BeginAutomaticUpdateCheckIfDue(bool notifyUser)
         {
             if (UpdateCheckSchedule.IsDue(
                 settings.AutomaticUpdateChecks,
                 settings.LastUpdateCheckUtc,
                 DateTime.UtcNow))
             {
-                BeginUpdateCheck(true);
+                BeginUpdateCheck(true, notifyUser);
             }
         }
 
-        private async void BeginUpdateCheck(bool automatic)
+        private async void BeginUpdateCheck(bool automatic, bool notifyUser)
         {
             if (updateCheckInProgress)
             {
+                if (notifyUser)
+                {
+                    ShowBalloon(localizer.Text(UiText.UpdateChecking), ToolTipIcon.Info);
+                }
                 return;
             }
             if (automatic && !UpdateCheckSchedule.IsDue(
@@ -400,6 +404,10 @@ namespace CodexKeyboardScroll
                 SaveSettings();
             }
             menuView.SetUpdateCheckStatus(UpdateCheckStatus.Checking, null);
+            if (notifyUser)
+            {
+                ShowBalloon(localizer.Text(UiText.UpdateChecking), ToolTipIcon.Info);
+            }
             Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
             UpdateCheckResult result = await updateCheckService.CheckAsync(currentVersion);
             if (disposed)
@@ -420,7 +428,17 @@ namespace CodexKeyboardScroll
                 settings.LatestKnownVersion = string.Empty;
                 SaveSettings();
             }
-            menuView.SetUpdateCheckStatus(result.Status, result.LatestVersion);
+            string failureReason = result.Status == UpdateCheckStatus.Failed
+                ? LocalizeUpdateFailure(result)
+                : null;
+            Version statusVersion = result.Status == UpdateCheckStatus.UpToDate
+                ? currentVersion
+                : result.LatestVersion;
+            menuView.SetUpdateCheckStatus(result.Status, statusVersion, failureReason);
+            if (notifyUser || result.Status == UpdateCheckStatus.UpdateAvailable)
+            {
+                ShowUpdateCheckResult(result, currentVersion, failureReason);
+            }
         }
 
         private void ToggleAutomaticUpdateChecks(bool enabled)
@@ -435,7 +453,55 @@ namespace CodexKeyboardScroll
             UpdateUi();
             if (enabled)
             {
-                BeginAutomaticUpdateCheckIfDue();
+                BeginAutomaticUpdateCheckIfDue(true);
+            }
+        }
+
+        private string LocalizeUpdateFailure(UpdateCheckResult result)
+        {
+            switch (result.FailureKind)
+            {
+                case UpdateCheckFailureKind.Timeout:
+                    return localizer.Text(UiText.UpdateFailureTimeout);
+                case UpdateCheckFailureKind.Network:
+                    return localizer.Text(UiText.UpdateFailureNetwork);
+                case UpdateCheckFailureKind.SecureConnection:
+                    return localizer.Text(UiText.UpdateFailureSecureConnection);
+                case UpdateCheckFailureKind.HttpResponse:
+                    return localizer.Format(
+                        UiText.UpdateFailureHttp,
+                        result.HttpStatusCode.HasValue ? result.HttpStatusCode.Value : 0);
+                case UpdateCheckFailureKind.InvalidResponse:
+                    return localizer.Text(UiText.UpdateFailureInvalidResponse);
+                default:
+                    return localizer.Text(UiText.UpdateFailureUnexpected);
+            }
+        }
+
+        private void ShowUpdateCheckResult(
+            UpdateCheckResult result,
+            Version currentVersion,
+            string failureReason)
+        {
+            if (result.Status == UpdateCheckStatus.UpdateAvailable && result.LatestVersion != null)
+            {
+                ShowBalloon(
+                    localizer.Format(UiText.UpdateAvailable, result.LatestVersion.ToString(3)),
+                    ToolTipIcon.Info);
+            }
+            else if (result.Status == UpdateCheckStatus.UpToDate && result.LatestVersion != null)
+            {
+                ShowBalloon(
+                    localizer.Format(UiText.UpdateUpToDate, currentVersion.ToString(3)),
+                    ToolTipIcon.Info);
+            }
+            else if (result.Status == UpdateCheckStatus.Failed)
+            {
+                ShowBalloon(
+                    localizer.Format(
+                        UiText.UpdateCheckFailed,
+                        failureReason ?? localizer.Text(UiText.UpdateFailureUnexpected)),
+                    ToolTipIcon.Warning);
             }
         }
 

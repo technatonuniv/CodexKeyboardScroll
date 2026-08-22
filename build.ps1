@@ -55,6 +55,7 @@ $arguments = @(
     "/reference:$(Join-Path $framework 'System.Net.Http.dll')",
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')",
     "/reference:$(Join-Path $framework 'System.Windows.Forms.dll')",
+    "/reference:$(Join-Path $framework 'System.Xml.dll')",
     "/reference:$(Join-Path $wpf 'UIAutomationClient.dll')",
     "/reference:$(Join-Path $wpf 'UIAutomationTypes.dll')",
     "/reference:$(Join-Path $wpf 'WindowsBase.dll')"
