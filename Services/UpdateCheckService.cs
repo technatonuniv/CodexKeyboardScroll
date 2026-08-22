@@ -169,7 +169,19 @@ namespace CodexKeyboardScroll
             {
                 value = value.Substring(0, suffix);
             }
-            return Version.TryParse(value, out version);
+
+            Version parsed;
+            if (!Version.TryParse(value, out parsed))
+            {
+                return false;
+            }
+
+            // Persistence and UI formatting require three components. Normalize
+            // valid short release tags once at the external-data boundary.
+            version = parsed.Build < 0
+                ? new Version(parsed.Major, parsed.Minor, 0)
+                : parsed;
+            return true;
         }
 
         public void Dispose()

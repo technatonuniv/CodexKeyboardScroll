@@ -146,6 +146,13 @@ namespace CodexKeyboardScroll
             Version version;
             Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1.0", out version));
             Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, version.ToString(3) == "2.1.0");
+            Check(ref failures, UpdateCheckService.TryParseReleaseTag("v2.1-beta", out version));
+            Check(ref failures, version != null && version.Equals(new Version(2, 1, 0)));
+            Check(ref failures, version.ToString(3) == "2.1.0");
+            Check(ref failures, version.CompareTo(new Version(2, 0, 1, 0)) > 0);
             Check(ref failures, UpdateCheckService.TryParseReleaseTag("2.0.1+build.4", out version));
             Check(ref failures, version != null && version.Equals(new Version(2, 0, 1)));
             Check(ref failures, !UpdateCheckService.TryParseReleaseTag("release", out version));
