@@ -35,6 +35,7 @@ namespace CodexKeyboardScroll
         UpdateCheckFailed,
         UpdateFailureTimeout,
         UpdateFailureNetwork,
+        UpdateFailureSecureConnection,
         UpdateFailureHttp,
         UpdateFailureInvalidResponse,
         UpdateFailureUnexpected,

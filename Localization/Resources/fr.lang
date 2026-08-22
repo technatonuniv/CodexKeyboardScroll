@@ -48,6 +48,7 @@ UpdateUpToDate=Vous disposez de la dernière version : {0}
 UpdateCheckFailed=Impossible de rechercher les mises à jour : {0}
 UpdateFailureTimeout=délai d’attente dépassé
 UpdateFailureNetwork=échec de la connexion réseau
+UpdateFailureSecureConnection=échec de la connexion sécurisée (TLS)
 UpdateFailureHttp=GitHub a renvoyé HTTP {0}
 UpdateFailureInvalidResponse=GitHub a renvoyé une réponse non valide
 UpdateFailureUnexpected=erreur interne inattendue

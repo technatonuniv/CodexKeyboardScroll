@@ -43,6 +43,7 @@ namespace CodexKeyboardScroll
         None,
         Timeout,
         Network,
+        SecureConnection,
         HttpResponse,
         InvalidResponse,
         Unexpected

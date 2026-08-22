@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +24,7 @@ namespace CodexKeyboardScroll
             TestSettingsMigration(ref failures);
             TestLocalization(ref failures);
             TestUpdateVersionParsing(ref failures);
+            TestUpdateRuntime(ref failures);
             TestUpdateCheckResults(ref failures);
             TestUpdateSchedule(ref failures);
             TestDropDownPlacement(ref failures);
@@ -207,6 +210,30 @@ namespace CodexKeyboardScroll
                 Check(ref failures, result.HttpStatusCode == 403);
                 Check(ref failures, !result.IsTransient);
             }
+
+            var secureFailure = new HttpRequestException(
+                "request failed",
+                new WebException(
+                    "secure channel failed",
+                    WebExceptionStatus.SecureChannelFailure));
+            Check(ref failures,
+                UpdateCheckService.ClassifyRequestFailure(secureFailure)
+                    == UpdateCheckFailureKind.SecureConnection);
+            Check(ref failures,
+                UpdateCheckService.ClassifyRequestFailure(new HttpRequestException("offline"))
+                    == UpdateCheckFailureKind.Network);
+        }
+
+        private static void TestUpdateRuntime(ref int failures)
+        {
+            var target = (TargetFrameworkAttribute)Assembly.GetExecutingAssembly()
+                .GetCustomAttributes(typeof(TargetFrameworkAttribute), false)
+                .SingleOrDefault();
+            Check(ref failures, target != null);
+            Check(ref failures,
+                target != null && target.FrameworkName == ".NETFramework,Version=v4.8");
+            Check(ref failures,
+                ServicePointManager.SecurityProtocol == SecurityProtocolType.SystemDefault);
         }
 
         private static HttpResponseMessage JsonResponse(string json)

@@ -48,6 +48,7 @@ UpdateUpToDate=最新バージョンです: {0}
 UpdateCheckFailed=更新を確認できませんでした: {0}
 UpdateFailureTimeout=要求がタイムアウトしました
 UpdateFailureNetwork=ネットワーク接続に失敗しました
+UpdateFailureSecureConnection=セキュリティで保護された接続 (TLS) に失敗しました
 UpdateFailureHttp=GitHub が HTTP {0} を返しました
 UpdateFailureInvalidResponse=GitHub から無効な応答が返されました
 UpdateFailureUnexpected=予期しない内部エラー

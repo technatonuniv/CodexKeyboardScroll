@@ -6,6 +6,8 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ### Fixed
 
+- Declared the .NET Framework 4.8 runtime contract and delegated TLS selection to Windows, preventing standalone builds from attempting GitHub with obsolete TLS 1.0 defaults.
+- Distinguished secure-channel failures from general network failures in update-check diagnostics.
 - Rebuilt update checks around a fresh HTTP client per attempt and added one retry for transient failures.
 - Preserved actionable failure categories instead of collapsing every update error into an unexplained message.
 - Added tray notifications for user-initiated update checks so progress and results remain visible after the menu closes.

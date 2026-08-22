@@ -48,6 +48,7 @@ UpdateUpToDate=नवीनतम संस्करण स्थापित �
 UpdateCheckFailed=अपडेट की जाँच नहीं हो सकी: {0}
 UpdateFailureTimeout=अनुरोध का समय समाप्त हो गया
 UpdateFailureNetwork=नेटवर्क कनेक्शन विफल रहा
+UpdateFailureSecureConnection=सुरक्षित कनेक्शन (TLS) विफल रहा
 UpdateFailureHttp=GitHub ने HTTP {0} लौटाया
 UpdateFailureInvalidResponse=GitHub से अमान्य प्रतिक्रिया मिली
 UpdateFailureUnexpected=अनपेक्षित आंतरिक त्रुटि

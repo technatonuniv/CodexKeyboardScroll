@@ -48,6 +48,7 @@ UpdateUpToDate=已是最新版本：{0}
 UpdateCheckFailed=無法檢查更新：{0}
 UpdateFailureTimeout=要求逾時
 UpdateFailureNetwork=網路連線失敗
+UpdateFailureSecureConnection=安全連線（TLS）失敗
 UpdateFailureHttp=GitHub 傳回了 HTTP {0}
 UpdateFailureInvalidResponse=GitHub 傳回了無效回應
 UpdateFailureUnexpected=未預期的內部錯誤

@@ -1,4 +1,7 @@
 using System.Reflection;
+using System.Runtime.Versioning;
+
+[assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 [assembly: AssemblyTitle("Codex Keyboard Scroll")]
 [assembly: AssemblyDescription("Windows keyboard navigation and focus utility for the Codex desktop app.")]

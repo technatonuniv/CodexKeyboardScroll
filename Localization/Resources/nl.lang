@@ -48,6 +48,7 @@ UpdateUpToDate=De nieuwste versie is geïnstalleerd: {0}
 UpdateCheckFailed=Kan niet controleren op updates: {0}
 UpdateFailureTimeout=time-out van de aanvraag
 UpdateFailureNetwork=netwerkverbinding mislukt
+UpdateFailureSecureConnection=beveiligde verbinding (TLS) mislukt
 UpdateFailureHttp=GitHub retourneerde HTTP {0}
 UpdateFailureInvalidResponse=GitHub retourneerde een ongeldig antwoord
 UpdateFailureUnexpected=onverwachte interne fout

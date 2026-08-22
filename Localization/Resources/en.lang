@@ -48,6 +48,7 @@ UpdateUpToDate=You’re up to date: {0}
 UpdateCheckFailed=Could not check for updates: {0}
 UpdateFailureTimeout=request timed out
 UpdateFailureNetwork=network connection failed
+UpdateFailureSecureConnection=secure connection (TLS) failed
 UpdateFailureHttp=GitHub returned HTTP {0}
 UpdateFailureInvalidResponse=GitHub returned an invalid response
 UpdateFailureUnexpected=unexpected internal error

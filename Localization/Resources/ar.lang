@@ -48,6 +48,7 @@ UpdateUpToDate=تم تثبيت أحدث إصدار: {0}
 UpdateCheckFailed=تعذر التحقق من وجود تحديثات: {0}
 UpdateFailureTimeout=انتهت مهلة الطلب
 UpdateFailureNetwork=فشل اتصال الشبكة
+UpdateFailureSecureConnection=فشل الاتصال الآمن (TLS)
 UpdateFailureHttp=أعاد GitHub حالة HTTP {0}
 UpdateFailureInvalidResponse=أعاد GitHub استجابة غير صالحة
 UpdateFailureUnexpected=خطأ داخلي غير متوقع

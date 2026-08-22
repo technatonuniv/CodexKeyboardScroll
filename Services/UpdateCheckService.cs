@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Security.Authentication;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -55,8 +56,8 @@ namespace CodexKeyboardScroll
 
         private async Task<UpdateCheckResult> CheckOnceAsync(Version currentVersion)
         {
-            // A fresh handler prevents stale proxy or connection state from surviving
-            // for the lifetime of the tray process. Transient failures get one retry.
+            // Keep transport state scoped to one attempt. Transient failures get
+            // one clean retry without retaining a failed connection.
             using (HttpMessageHandler handler = handlerFactory())
             using (var client = new HttpClient(handler))
             using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(
@@ -107,10 +108,10 @@ namespace CodexKeyboardScroll
                         null,
                         true);
                 }
-                catch (HttpRequestException)
+                catch (HttpRequestException error)
                 {
                     return UpdateCheckResult.Failed(
-                        UpdateCheckFailureKind.Network,
+                        ClassifyRequestFailure(error),
                         null,
                         true);
                 }
@@ -148,6 +149,27 @@ namespace CodexKeyboardScroll
             return statusCode == HttpStatusCode.RequestTimeout
                 || value == 429
                 || value >= 500;
+        }
+
+        internal static UpdateCheckFailureKind ClassifyRequestFailure(Exception error)
+        {
+            for (Exception current = error; current != null; current = current.InnerException)
+            {
+                var webError = current as WebException;
+                if (webError != null
+                    && (webError.Status == WebExceptionStatus.SecureChannelFailure
+                        || webError.Status == WebExceptionStatus.TrustFailure))
+                {
+                    return UpdateCheckFailureKind.SecureConnection;
+                }
+
+                if (current is AuthenticationException)
+                {
+                    return UpdateCheckFailureKind.SecureConnection;
+                }
+            }
+
+            return UpdateCheckFailureKind.Network;
         }
 
         internal static bool TryParseReleaseTag(string tag, out Version version)

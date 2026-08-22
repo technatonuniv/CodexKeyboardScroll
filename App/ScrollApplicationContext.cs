@@ -465,6 +465,8 @@ namespace CodexKeyboardScroll
                     return localizer.Text(UiText.UpdateFailureTimeout);
                 case UpdateCheckFailureKind.Network:
                     return localizer.Text(UiText.UpdateFailureNetwork);
+                case UpdateCheckFailureKind.SecureConnection:
+                    return localizer.Text(UiText.UpdateFailureSecureConnection);
                 case UpdateCheckFailureKind.HttpResponse:
                     return localizer.Format(
                         UiText.UpdateFailureHttp,

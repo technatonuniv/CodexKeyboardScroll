@@ -48,6 +48,7 @@ UpdateUpToDate=Aktuelle Version installiert: {0}
 UpdateCheckFailed=Die Updateprüfung ist fehlgeschlagen: {0}
 UpdateFailureTimeout=Zeitüberschreitung der Anfrage
 UpdateFailureNetwork=Netzwerkverbindung fehlgeschlagen
+UpdateFailureSecureConnection=sichere Verbindung (TLS) fehlgeschlagen
 UpdateFailureHttp=GitHub hat HTTP {0} zurückgegeben
 UpdateFailureInvalidResponse=GitHub hat eine ungültige Antwort zurückgegeben
 UpdateFailureUnexpected=unerwarteter interner Fehler

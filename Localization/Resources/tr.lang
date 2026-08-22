@@ -48,6 +48,7 @@ UpdateUpToDate=En son sürüm yüklü: {0}
 UpdateCheckFailed=Güncellemeler denetlenemedi: {0}
 UpdateFailureTimeout=istek zaman aşımına uğradı
 UpdateFailureNetwork=ağ bağlantısı başarısız oldu
+UpdateFailureSecureConnection=güvenli bağlantı (TLS) başarısız oldu
 UpdateFailureHttp=GitHub HTTP {0} döndürdü
 UpdateFailureInvalidResponse=GitHub geçersiz bir yanıt döndürdü
 UpdateFailureUnexpected=beklenmeyen dahili hata

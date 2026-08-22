@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -11,6 +12,10 @@ namespace CodexKeyboardScroll
         [STAThread]
         private static int Main(string[] args)
         {
+            // Let Windows select current secure protocols. Without an explicit
+            // .NET 4.8 runtime contract, standalone csc builds default to TLS 1.0.
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.SystemDefault;
+
             if (args.Length > 0 && string.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
             {
                 return SelfTests.Run();

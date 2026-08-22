@@ -48,6 +48,7 @@ UpdateUpToDate=Установлена актуальная версия: {0}
 UpdateCheckFailed=Не удалось проверить обновления: {0}
 UpdateFailureTimeout=истекло время ожидания
 UpdateFailureNetwork=ошибка сетевого подключения
+UpdateFailureSecureConnection=ошибка защищённого соединения (TLS)
 UpdateFailureHttp=GitHub вернул ошибку HTTP {0}
 UpdateFailureInvalidResponse=GitHub вернул некорректный ответ
 UpdateFailureUnexpected=непредвиденная внутренняя ошибка
