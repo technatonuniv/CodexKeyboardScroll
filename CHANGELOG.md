@@ -4,6 +4,8 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-22
+
 ### Fixed
 
 - Declared the .NET Framework 4.8 runtime contract and delegated TLS selection to Windows, preventing standalone builds from attempting GitHub with obsolete TLS 1.0 defaults.
@@ -65,7 +67,8 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 - First public release.
 
-[Unreleased]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.4.1...v2.0.0
 [1.4.1]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/technatonuniv/CodexKeyboardScroll/compare/v1.3.0...v1.4.0
