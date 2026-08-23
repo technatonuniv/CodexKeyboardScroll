@@ -315,6 +315,8 @@ namespace CodexKeyboardScroll
 
                 var speed = (ToolStripMenuItem)view.Menu.Items["speedMenu"];
                 ((ToolStripMenuItem)speed.DropDownItems[0]).PerformClick();
+                Check(ref failures, !view.Menu.Items.Cast<ToolStripItem>()
+                    .Any(item => item.Text == "Reading mode"));
                 Check(ref failures, repositoryRequested);
                 Check(ref failures, updateRequested);
                 Check(ref failures, automaticUpdatesEnabled);

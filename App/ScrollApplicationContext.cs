@@ -95,7 +95,6 @@ namespace CodexKeyboardScroll
         private void WireMenuEvents()
         {
             menuView.EnabledChanged += ToggleEnabled;
-            menuView.ReadingModeChanged += ToggleReadingMode;
             menuView.ShortcutChanged += ChangeShortcut;
             menuView.SpeedChanged += ChangeSpeed;
             menuView.SpaceScrollChanged += ToggleSpaceBehavior;
@@ -319,17 +318,6 @@ namespace CodexKeyboardScroll
                 nextHotkeyRetryTick = 0;
             }
             UpdateUi();
-        }
-
-        private void ToggleReadingMode(bool enabled)
-        {
-            if (enabled && (!toolEnabled || !NativeInput.IsChatForeground()))
-            {
-                ShowBalloon(localizer.Text(UiText.BalloonActivateCodex), ToolTipIcon.Warning);
-                UpdateUi();
-                return;
-            }
-            SetReadingMode(enabled);
         }
 
         private void ChangeShortcut(FocusShortcut shortcut)

@@ -4,6 +4,10 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Removed the ineffective manual Reading mode tray item; reading mode remains automatic and available through the focus shortcut.
+
 ## [2.0.1] - 2026-08-22
 
 ### Fixed

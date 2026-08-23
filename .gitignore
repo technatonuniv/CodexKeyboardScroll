@@ -5,6 +5,7 @@
 artifacts/
 bin/
 obj/
+ProjectArchive/
 
 # Per-user settings
 CodexKeyboardScroll.settings.ini
