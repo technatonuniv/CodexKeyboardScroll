@@ -8,5 +8,5 @@ using System.Runtime.Versioning;
 [assembly: AssemblyCompany("technatonuniv")]
 [assembly: AssemblyProduct("Codex Keyboard Scroll")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 technatonuniv")]
-[assembly: AssemblyVersion("2.0.1.0")]
-[assembly: AssemblyFileVersion("2.0.1.0")]
+[assembly: AssemblyVersion("2.0.2.0")]
+[assembly: AssemblyFileVersion("2.0.2.0")]
