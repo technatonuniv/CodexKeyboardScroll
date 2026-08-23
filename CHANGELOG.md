@@ -4,6 +4,10 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed minor reading-mode activation issues.
+
 ## [2.0.3] - 2026-08-23
 
 ### Fixed

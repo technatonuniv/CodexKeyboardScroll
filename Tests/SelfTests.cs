@@ -46,15 +46,27 @@ namespace CodexKeyboardScroll
             Check(ref failures, !WindowLayout.IsTranscriptClick(normal, new Point(700, 120)));
             Check(ref failures, !WindowLayout.IsTranscriptClick(normal, new Point(700, 850)));
 
+            var composer = new NativeInput.Rect(350, 760, 1050, 880);
+            Check(ref failures,
+                WindowLayout.IsTranscriptClick(normal, new Point(700, 740), composer));
+            Check(ref failures,
+                !WindowLayout.IsTranscriptClick(normal, new Point(700, 760), composer));
+            Check(ref failures,
+                !WindowLayout.IsTranscriptClick(normal, new Point(700, 820), composer));
+
+            var invalidComposer = new NativeInput.Rect(350, 300, 1050, 420);
+            Check(ref failures,
+                !WindowLayout.IsTranscriptClick(normal, new Point(700, 740), invalidComposer));
+
             var narrow = new NativeInput.Rect(20, 30, 720, 730);
             Check(ref failures, WindowLayout.IsTranscriptClick(narrow, new Point(200, 300)));
             Check(ref failures, !WindowLayout.IsTranscriptClick(narrow, new Point(10, 300)));
 
             Point scroll = WindowLayout.ScrollTarget(normal);
-            Point composer = WindowLayout.ComposerTarget(normal);
+            Point composerTarget = WindowLayout.ComposerTarget(normal);
             Check(ref failures, Contains(normal, scroll));
-            Check(ref failures, Contains(normal, composer));
-            Check(ref failures, composer.Y > scroll.Y);
+            Check(ref failures, Contains(normal, composerTarget));
+            Check(ref failures, composerTarget.Y > scroll.Y);
         }
 
         private static void TestTypingKeys(ref int failures)

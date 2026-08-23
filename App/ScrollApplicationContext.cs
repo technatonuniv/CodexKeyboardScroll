@@ -142,13 +142,19 @@ namespace CodexKeyboardScroll
             }
         }
 
-        private static bool ClickWasInTranscript(Point click)
+        private bool ClickWasInTranscript(Point click)
         {
             NativeInput.Rect rect;
             IntPtr window = NativeInput.GetForegroundWindow();
-            return window != IntPtr.Zero
-                && NativeInput.GetWindowRect(window, out rect)
-                && WindowLayout.IsTranscriptClick(rect, click);
+            if (window == IntPtr.Zero || !NativeInput.GetWindowRect(window, out rect))
+            {
+                return false;
+            }
+
+            NativeInput.Rect composerBounds;
+            return composerLocator.TryGetBounds(window, out composerBounds)
+                ? WindowLayout.IsTranscriptClick(rect, click, composerBounds)
+                : WindowLayout.IsTranscriptClick(rect, click);
         }
 
         private void UpdateFocusHotkey(bool shouldBeActive)
