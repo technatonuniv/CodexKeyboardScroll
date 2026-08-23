@@ -7,6 +7,14 @@ namespace CodexKeyboardScroll
     {
         internal static bool IsTranscriptClick(NativeInput.Rect rect, Point point)
         {
+            return IsTranscriptClick(rect, point, null);
+        }
+
+        internal static bool IsTranscriptClick(
+            NativeInput.Rect rect,
+            Point point,
+            NativeInput.Rect? composerBounds)
+        {
             int width = rect.Right - rect.Left;
             int height = rect.Bottom - rect.Top;
             if (width < 320 || height < 300
@@ -20,10 +28,31 @@ namespace CodexKeyboardScroll
             // transcript usable across both narrow and maximized window layouts.
             int leftGuard = width < 900 ? 24 : Math.Max(220, (int)(width * 0.16));
             int bottomGuard = Math.Max(150, Math.Min(280, (int)(height * 0.22)));
+            int transcriptBottom = rect.Bottom - bottomGuard;
+            if (composerBounds.HasValue
+                && IsUsableComposerBounds(rect, composerBounds.Value, height))
+            {
+                transcriptBottom = composerBounds.Value.Top;
+            }
+
             return point.X >= rect.Left + leftGuard
                 && point.X < rect.Right - 20
                 && point.Y >= rect.Top + 55
-                && point.Y < rect.Bottom - bottomGuard;
+                && point.Y < transcriptBottom;
+        }
+
+        private static bool IsUsableComposerBounds(
+            NativeInput.Rect window,
+            NativeInput.Rect composer,
+            int windowHeight)
+        {
+            return composer.Right > composer.Left
+                && composer.Bottom > composer.Top
+                && composer.Left < window.Right
+                && composer.Right > window.Left
+                && composer.Top >= window.Top + (int)(windowHeight * 0.45)
+                && composer.Top < window.Bottom - 20
+                && composer.Bottom <= window.Bottom + 20;
         }
 
         internal static Point ScrollTarget(NativeInput.Rect rect)

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Automation;
 
@@ -8,6 +9,7 @@ namespace CodexKeyboardScroll
     {
         private readonly object sync = new object();
         private AutomationElement composer;
+        private AutomationElement composerContainer;
         private IntPtr cachedWindow;
         private int lastRefreshTick;
         private int refreshRunning;
@@ -91,15 +93,65 @@ namespace CodexKeyboardScroll
             return false;
         }
 
+        internal bool TryGetBounds(IntPtr window, out NativeInput.Rect bounds)
+        {
+            AutomationElement element;
+            bool isContainer;
+            lock (sync)
+            {
+                isContainer = cachedWindow == window && composerContainer != null;
+                element = isContainer
+                    ? composerContainer
+                    : cachedWindow == window ? composer : null;
+            }
+
+            if (element == null)
+            {
+                bounds = new NativeInput.Rect();
+                RequestRefresh(window);
+                return false;
+            }
+
+            try
+            {
+                System.Windows.Rect rect = element.Current.BoundingRectangle;
+                if (!isContainer && !rect.IsEmpty)
+                {
+                    // The editable element starts inside the visual composer card.
+                    // Include its small upper inset when no suitable parent is exposed.
+                    rect.Y -= 24;
+                    rect.Height += 24;
+                }
+
+                if (TryConvertBounds(rect, out bounds))
+                {
+                    return true;
+                }
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error))
+                {
+                    throw;
+                }
+            }
+
+            bounds = new NativeInput.Rect();
+            RequestRefresh(window);
+            return false;
+        }
+
         private void Refresh(IntPtr window)
         {
             AutomationElement found = null;
+            AutomationElement container = null;
             try
             {
                 AutomationElement root = AutomationElement.FromHandle(window);
                 if (root != null)
                 {
                     found = FindBestComposer(root);
+                    container = FindComposerContainer(found);
                 }
             }
             catch
@@ -114,8 +166,91 @@ namespace CodexKeyboardScroll
             {
                 cachedWindow = window;
                 composer = found;
+                composerContainer = container;
                 hasCompletedRefresh = true;
             }
+        }
+
+        private static AutomationElement FindComposerContainer(AutomationElement element)
+        {
+            if (element == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                System.Windows.Rect editRect = element.Current.BoundingRectangle;
+                AutomationElement parent = TreeWalker.RawViewWalker.GetParent(element);
+                if (parent == null)
+                {
+                    return null;
+                }
+
+                System.Windows.Rect parentRect = parent.Current.BoundingRectangle;
+                return IsComposerContainer(parentRect, editRect) ? parent : null;
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error))
+                {
+                    throw;
+                }
+                return null;
+            }
+        }
+
+        private static bool IsComposerContainer(
+            System.Windows.Rect candidate,
+            System.Windows.Rect edit)
+        {
+            return !candidate.IsEmpty
+                && !edit.IsEmpty
+                && candidate.Left <= edit.Left + 2
+                && candidate.Top <= edit.Top + 2
+                && candidate.Right >= edit.Right - 2
+                && candidate.Bottom >= edit.Bottom - 2
+                && edit.Top - candidate.Top <= 80
+                && candidate.Bottom - edit.Bottom <= 100
+                && candidate.Width - edit.Width <= 200
+                && candidate.Height <= 220;
+        }
+
+        private static bool TryConvertBounds(
+            System.Windows.Rect rect,
+            out NativeInput.Rect bounds)
+        {
+            if (rect.IsEmpty
+                || !IsScreenCoordinate(rect.Left)
+                || !IsScreenCoordinate(rect.Top)
+                || !IsScreenCoordinate(rect.Right)
+                || !IsScreenCoordinate(rect.Bottom))
+            {
+                bounds = new NativeInput.Rect();
+                return false;
+            }
+
+            bounds = new NativeInput.Rect(
+                (int)Math.Floor(rect.Left),
+                (int)Math.Floor(rect.Top),
+                (int)Math.Ceiling(rect.Right),
+                (int)Math.Ceiling(rect.Bottom));
+            return bounds.Right > bounds.Left && bounds.Bottom > bounds.Top;
+        }
+
+        private static bool IsScreenCoordinate(double value)
+        {
+            return !double.IsNaN(value)
+                && !double.IsInfinity(value)
+                && value >= int.MinValue
+                && value <= int.MaxValue;
+        }
+
+        private static bool IsExpectedAccessibilityFailure(Exception error)
+        {
+            return error is ElementNotAvailableException
+                || error is InvalidOperationException
+                || error is COMException;
         }
 
         private static AutomationElement FindBestComposer(AutomationElement root)
@@ -184,6 +319,7 @@ namespace CodexKeyboardScroll
             lock (sync)
             {
                 composer = null;
+                composerContainer = null;
                 cachedWindow = IntPtr.Zero;
                 hasCompletedRefresh = false;
             }
