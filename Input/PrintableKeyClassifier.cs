@@ -2,6 +2,20 @@ namespace CodexKeyboardScroll
 {
     internal static class PrintableKeyClassifier
     {
+        internal static ScrollCommand? SpaceScrollCommand(
+            uint virtualKey,
+            bool spaceScroll,
+            bool shiftDown,
+            bool commandModifierDown)
+        {
+            if (virtualKey != 0x20 || !spaceScroll || commandModifierDown)
+            {
+                return null;
+            }
+
+            return shiftDown ? ScrollCommand.PageUp : ScrollCommand.PageDown;
+        }
+
         internal static bool IsTypingKey(uint virtualKey, bool spaceScroll)
         {
             if (virtualKey == 0x20) return !spaceScroll;

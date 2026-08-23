@@ -19,6 +19,9 @@ namespace CodexKeyboardScroll
             int failures = 0;
             TestWindowLayout(ref failures);
             TestTypingKeys(ref failures);
+            TestSpaceScrolling(ref failures);
+            TestKeyboardHookFiltering(ref failures);
+            TestModifierStateClassification(ref failures);
             TestShortcutLabels(ref failures);
             TestScrollProfile(ref failures);
             TestSettingsMigration(ref failures);
@@ -64,6 +67,39 @@ namespace CodexKeyboardScroll
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x20, true));
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x26, true));
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x70, true));
+        }
+
+        private static void TestSpaceScrolling(ref int failures)
+        {
+            Check(ref failures,
+                PrintableKeyClassifier.SpaceScrollCommand(0x20, true, false, false)
+                    == ScrollCommand.PageDown);
+            Check(ref failures,
+                PrintableKeyClassifier.SpaceScrollCommand(0x20, true, true, false)
+                    == ScrollCommand.PageUp);
+            Check(ref failures,
+                !PrintableKeyClassifier.SpaceScrollCommand(0x20, false, true, false).HasValue);
+            Check(ref failures,
+                !PrintableKeyClassifier.SpaceScrollCommand(0x20, true, true, true).HasValue);
+            Check(ref failures,
+                !PrintableKeyClassifier.SpaceScrollCommand(0x41, true, true, false).HasValue);
+        }
+
+        private static void TestKeyboardHookFiltering(ref int failures)
+        {
+            Check(ref failures, KeyboardHook.ShouldProcess(IntPtr.Zero));
+            Check(ref failures, KeyboardHook.ShouldProcess(new IntPtr(1)));
+            Check(ref failures, !KeyboardHook.ShouldProcess(NativeInput.SyntheticInputMarker));
+        }
+
+        private static void TestModifierStateClassification(ref int failures)
+        {
+            Check(ref failures, NativeInput.StickyShiftModifierActive(0x01000000));
+            Check(ref failures, NativeInput.StickyShiftModifierActive(0x00020000));
+            Check(ref failures, !NativeInput.StickyShiftModifierActive(0));
+            Check(ref failures, NativeInput.StickyCommandModifierActive(0x04000000));
+            Check(ref failures, NativeInput.StickyCommandModifierActive(0x00100000));
+            Check(ref failures, !NativeInput.StickyCommandModifierActive(0x01010000));
         }
 
         private static void TestShortcutLabels(ref int failures)
