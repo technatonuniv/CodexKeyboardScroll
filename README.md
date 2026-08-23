@@ -77,7 +77,6 @@ menu and opens the latest GitHub release.
 Other menu items allow you to:
 
 - enable or disable the utility;
-- enable reading mode manually;
 - choose the focus shortcut;
 - select a scroll speed from 0.25 to 10, with 5 as the default; 0.5 is exactly half the level-1 speed and 0.25 is exactly one quarter;
 - choose whether `Space` scrolls the transcript or starts typing;
@@ -121,7 +120,7 @@ The utility refreshes the Codex accessibility tree on a background worker and ca
 
 Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the Codex child window at the transcript coordinates, so the system pointer never moves or flickers.
 
-Manual click classification still uses the click position. If an unusual window layout is not classified correctly, use the focus shortcut or enable reading mode from the tray menu.
+Manual click classification still uses the click position. If an unusual window layout is not classified correctly, use the focus shortcut.
 
 ## Hotkey recovery
 
