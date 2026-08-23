@@ -73,12 +73,21 @@ namespace CodexKeyboardScroll
         internal readonly uint VirtualKey;
         internal readonly uint ScanCode;
         internal readonly uint Flags;
+        internal readonly bool ShiftDown;
+        internal readonly uint ShiftVirtualKey;
 
-        internal KeyboardStroke(uint virtualKey, uint scanCode, uint flags)
+        internal KeyboardStroke(
+            uint virtualKey,
+            uint scanCode,
+            uint flags,
+            bool shiftDown,
+            uint shiftVirtualKey)
         {
             VirtualKey = virtualKey;
             ScanCode = scanCode;
             Flags = flags;
+            ShiftDown = shiftDown;
+            ShiftVirtualKey = shiftVirtualKey;
         }
     }
 }

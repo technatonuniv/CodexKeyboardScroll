@@ -20,7 +20,6 @@ namespace CodexKeyboardScroll
         private const int PageUpId = 103;
         private const int PageDownId = 104;
         private const int SpaceId = 105;
-        private const int ShiftSpaceId = 106;
 
         private readonly Action<ScrollCommand> scrollHandler;
         private readonly Action focusHandler;
@@ -88,7 +87,7 @@ namespace CodexKeyboardScroll
             }
         }
 
-        internal bool EnableScrollingHotkeys(bool captureSpace, out HotkeyError error)
+        internal bool EnableScrollingHotkeys(bool captureSpaceFallback, out HotkeyError error)
         {
             DisableScrollingHotkeys();
             var definitions = new List<HotkeyDefinition>
@@ -98,10 +97,11 @@ namespace CodexKeyboardScroll
                 new HotkeyDefinition(PageUpId, 0, Keys.PageUp),
                 new HotkeyDefinition(PageDownId, 0, Keys.PageDown)
             };
-            if (captureSpace)
+            // Register Space globally only when the keyboard hook is unavailable.
+            // The hook handles modifier state and key repeat more reliably.
+            if (captureSpaceFallback)
             {
                 definitions.Add(new HotkeyDefinition(SpaceId, 0, Keys.Space));
-                definitions.Add(new HotkeyDefinition(ShiftSpaceId, ModShift, Keys.Space));
             }
 
             foreach (HotkeyDefinition definition in definitions)
@@ -145,8 +145,7 @@ namespace CodexKeyboardScroll
                 case FocusToggleId: focusHandler(); break;
                 case UpId: scrollHandler(ScrollCommand.LineUp); break;
                 case DownId: scrollHandler(ScrollCommand.LineDown); break;
-                case PageUpId:
-                case ShiftSpaceId: scrollHandler(ScrollCommand.PageUp); break;
+                case PageUpId: scrollHandler(ScrollCommand.PageUp); break;
                 case PageDownId:
                 case SpaceId: scrollHandler(ScrollCommand.PageDown); break;
             }

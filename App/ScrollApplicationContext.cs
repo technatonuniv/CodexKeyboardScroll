@@ -66,7 +66,7 @@ namespace CodexKeyboardScroll
             pollTimer.Start();
 
             int hookError;
-            keyboardHook = new KeyboardHook(HandlePrintableKey, out hookError);
+            keyboardHook = new KeyboardHook(HandleKeyboardStroke, out hookError);
             if (hookError != 0)
             {
                 ShowBalloon(localizer.Format(UiText.ErrorKeyboardHookUnavailable, hookError), ToolTipIcon.Warning);
@@ -210,7 +210,8 @@ namespace CodexKeyboardScroll
             if (enabled)
             {
                 HotkeyError error;
-                if (!hotkeys.EnableScrollingHotkeys(settings.SpaceScroll, out error))
+                bool captureSpaceFallback = settings.SpaceScroll && !keyboardHook.IsAvailable;
+                if (!hotkeys.EnableScrollingHotkeys(captureSpaceFallback, out error))
                 {
                     ShowBalloon(LocalizeHotkeyError(error), ToolTipIcon.Error);
                     UpdateUi();
@@ -289,10 +290,36 @@ namespace CodexKeyboardScroll
             }
         }
 
-        private bool HandlePrintableKey(KeyboardStroke stroke)
+        private bool HandleKeyboardStroke(KeyboardStroke stroke)
         {
-            if (!toolEnabled || !readingMode || !NativeInput.IsChatForeground()
-                || NativeInput.IsCommandModifierDown()
+            if (!toolEnabled || !readingMode || !NativeInput.IsChatForeground())
+            {
+                return false;
+            }
+
+            bool commandModifierDown = NativeInput.IsCommandModifierDown();
+            bool shiftDown = NativeInput.IsShiftModifierDown(stroke.ShiftDown);
+            ScrollCommand? scrollCommand = PrintableKeyClassifier.SpaceScrollCommand(
+                stroke.VirtualKey,
+                settings.SpaceScroll,
+                shiftDown,
+                commandModifierDown);
+            if (scrollCommand.HasValue)
+            {
+                if (shiftDown && scrollCommand.Value == ScrollCommand.PageUp)
+                {
+                    return NativeInput.ScrollForegroundWithoutShift(
+                        ScrollProfile.WheelDelta(
+                            scrollCommand.Value,
+                            settings.ScrollSpeedLevel),
+                        stroke.ShiftVirtualKey,
+                        stroke.ShiftDown);
+                }
+                HandleScrollHotkey(scrollCommand.Value);
+                return true;
+            }
+
+            if (commandModifierDown
                 || !PrintableKeyClassifier.IsTypingKey(stroke.VirtualKey, settings.SpaceScroll))
             {
                 return false;

@@ -10,12 +10,21 @@ namespace CodexKeyboardScroll
     {
         internal const int VkLeftButton = 0x01;
         internal const int WheelDelta = 120;
+        internal static readonly IntPtr SyntheticInputMarker = new IntPtr(0x434B5301);
 
         private const uint InputMouse = 0;
         private const uint InputKeyboard = 1;
+        private const uint SpiGetStickyKeys = 0x003A;
+        private const uint StickyLeftShiftLatched = 0x01000000;
+        private const uint StickyRightShiftLatched = 0x02000000;
+        private const uint StickyLeftShiftLocked = 0x00010000;
+        private const uint StickyRightShiftLocked = 0x00020000;
+        private const uint StickyCommandLatched = 0xFC000000;
+        private const uint StickyCommandLocked = 0x00FC0000;
         private const uint MouseMove = 0x0001;
         private const uint MouseLeftDown = 0x0002;
         private const uint MouseLeftUp = 0x0004;
+        private const uint MouseWheel = 0x0800;
         private const uint MouseVirtualDesk = 0x4000;
         private const uint MouseAbsolute = 0x8000;
         private const uint KeyExtended = 0x0001;
@@ -61,6 +70,13 @@ namespace CodexKeyboardScroll
         private static extern uint SendInput(uint count, Input[] inputs, int size);
 
         [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SystemParametersInfo(
+            uint action,
+            uint parameter,
+            ref StickyKeys stickyKeys,
+            uint updateFlags);
+
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll")]
@@ -103,12 +119,65 @@ namespace CodexKeyboardScroll
 
         internal static bool IsCommandModifierDown()
         {
-            return IsKeyDown(0x11) || IsKeyDown(0x12) || IsKeyDown(0x5B) || IsKeyDown(0x5C);
+            return IsKeyDown(0x11)
+                || IsKeyDown(0x12)
+                || IsKeyDown(0x5B)
+                || IsKeyDown(0x5C)
+                || StickyCommandModifierActive(GetStickyKeyFlags());
+        }
+
+        internal static bool IsShiftModifierDown(bool hookShiftDown)
+        {
+            return hookShiftDown
+                || IsKeyDown(0x10)
+                || StickyShiftModifierActive(GetStickyKeyFlags());
+        }
+
+        internal static bool StickyShiftModifierActive(uint flags)
+        {
+            const uint mask = StickyLeftShiftLatched
+                | StickyRightShiftLatched
+                | StickyLeftShiftLocked
+                | StickyRightShiftLocked;
+            return (flags & mask) != 0;
+        }
+
+        internal static bool StickyCommandModifierActive(uint flags)
+        {
+            return (flags & (StickyCommandLatched | StickyCommandLocked)) != 0;
         }
 
         internal static bool ScrollForeground(int wheelDelta)
         {
             return ScrollWindow(GetForegroundWindow(), wheelDelta);
+        }
+
+        internal static bool ScrollForegroundWithoutShift(
+            int wheelDelta,
+            uint shiftVirtualKey,
+            bool restoreShift)
+        {
+            uint key = shiftVirtualKey == 0 ? 0x10 : shiftVirtualKey;
+            var shift = new KeyboardStroke(key, 0, 0, false, 0);
+            Input shiftUp = KeyboardInput(shift, true);
+            Input shiftDown = KeyboardInput(shift, false);
+            Input wheel = MouseInput(MouseWheel, 0, 0, unchecked((uint)wheelDelta));
+            Input[] sequence = restoreShift
+                ? new[] { shiftUp, wheel, shiftDown }
+                : new[] { shiftUp, wheel };
+            uint inserted = SendInput(
+                (uint)sequence.Length,
+                sequence,
+                Marshal.SizeOf(typeof(Input)));
+
+            // SendInput normally inserts the complete batch. If the final restore
+            // event is ever rejected, make one best-effort attempt to restore Shift.
+            if (restoreShift && inserted > 0 && inserted < sequence.Length)
+            {
+                Input[] restore = { shiftDown };
+                SendInput(1, restore, Marshal.SizeOf(typeof(Input)));
+            }
+            return inserted >= 2;
         }
 
         internal static bool ScrollWindow(IntPtr window, int wheelDelta)
@@ -172,7 +241,7 @@ namespace CodexKeyboardScroll
 
         internal static bool DismissMenuMode()
         {
-            var escape = new KeyboardStroke(0x1B, 0, 0);
+            var escape = new KeyboardStroke(0x1B, 0, 0, false, 0);
             Input[] inputs = { KeyboardInput(escape, false), KeyboardInput(escape, true) };
             return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == (uint)inputs.Length;
         }
@@ -180,6 +249,14 @@ namespace CodexKeyboardScroll
         private static bool IsKeyDown(int virtualKey)
         {
             return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+        }
+
+        private static uint GetStickyKeyFlags()
+        {
+            var stickyKeys = new StickyKeys { Size = (uint)Marshal.SizeOf(typeof(StickyKeys)) };
+            return SystemParametersInfo(SpiGetStickyKeys, stickyKeys.Size, ref stickyKeys, 0)
+                ? stickyKeys.Flags
+                : 0;
         }
 
         private static IntPtr DeepestChildAtPoint(IntPtr root, Point screenPoint)
@@ -254,7 +331,14 @@ namespace CodexKeyboardScroll
                 Type = InputMouse,
                 Data = new InputUnion
                 {
-                    Mouse = new MouseInputNative { X = x, Y = y, Data = data, Flags = flags }
+                    Mouse = new MouseInputNative
+                    {
+                        X = x,
+                        Y = y,
+                        Data = data,
+                        Flags = flags,
+                        ExtraInfo = SyntheticInputMarker
+                    }
                 }
             };
         }
@@ -273,7 +357,8 @@ namespace CodexKeyboardScroll
                     {
                         VirtualKey = stroke.ScanCode == 0 ? (ushort)stroke.VirtualKey : (ushort)0,
                         ScanCode = (ushort)stroke.ScanCode,
-                        Flags = flags
+                        Flags = flags,
+                        ExtraInfo = SyntheticInputMarker
                     }
                 }
             };
@@ -336,6 +421,13 @@ namespace CodexKeyboardScroll
             internal uint Flags;
             internal uint Time;
             internal IntPtr ExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct StickyKeys
+        {
+            internal uint Size;
+            internal uint Flags;
         }
     }
 }

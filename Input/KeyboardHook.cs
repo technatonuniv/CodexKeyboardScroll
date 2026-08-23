@@ -11,12 +11,16 @@ namespace CodexKeyboardScroll
         private const int WmKeyUp = 0x0101;
         private const int WmSysKeyDown = 0x0104;
         private const int WmSysKeyUp = 0x0105;
-        private const uint LlkhfInjected = 0x10;
+        private const uint VkShift = 0x10;
+        private const uint VkLeftShift = 0xA0;
+        private const uint VkRightShift = 0xA1;
 
         private readonly Func<KeyboardStroke, bool> handler;
         private readonly HookProc hookProc;
         private readonly HashSet<uint> suppressedKeyUps = new HashSet<uint>();
         private IntPtr hook;
+        private bool shiftDown;
+        private uint shiftVirtualKey;
 
         internal KeyboardHook(Func<KeyboardStroke, bool> handler, out int win32Error)
         {
@@ -26,24 +30,45 @@ namespace CodexKeyboardScroll
             win32Error = hook == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
         }
 
+        internal bool IsAvailable
+        {
+            get { return hook != IntPtr.Zero; }
+        }
+
+        internal static bool ShouldProcess(IntPtr extraInfo)
+        {
+            return extraInfo != NativeInput.SyntheticInputMarker;
+        }
+
         private IntPtr HookCallback(int code, IntPtr wParam, IntPtr lParam)
         {
             if (code >= 0)
             {
                 var data = (KbdLlHookStruct)Marshal.PtrToStructure(lParam, typeof(KbdLlHookStruct));
-                // Replayed keys are injected deliberately after composer focus. Ignoring
-                // them here prevents the hook from recursively handling its own input.
-                if ((data.Flags & LlkhfInjected) == 0)
+                // Accessibility and remapping tools can legitimately inject input. Only
+                // events marked by this process are skipped to prevent replay recursion.
+                if (ShouldProcess(data.ExtraInfo))
                 {
                     int message = wParam.ToInt32();
-                    if ((message == WmKeyUp || message == WmSysKeyUp)
-                        && suppressedKeyUps.Remove(data.VirtualKey))
+                    bool keyDown = message == WmKeyDown || message == WmSysKeyDown;
+                    bool keyUp = message == WmKeyUp || message == WmSysKeyUp;
+                    if (IsShiftKey(data.VirtualKey))
+                    {
+                        shiftDown = keyDown ? true : keyUp ? false : shiftDown;
+                        shiftVirtualKey = keyDown ? data.VirtualKey : keyUp ? 0 : shiftVirtualKey;
+                    }
+                    if (keyUp && suppressedKeyUps.Remove(data.VirtualKey))
                     {
                         return new IntPtr(1);
                     }
-                    if (message == WmKeyDown || message == WmSysKeyDown)
+                    if (keyDown)
                     {
-                        var stroke = new KeyboardStroke(data.VirtualKey, data.ScanCode, data.Flags);
+                        var stroke = new KeyboardStroke(
+                            data.VirtualKey,
+                            data.ScanCode,
+                            data.Flags,
+                            shiftDown,
+                            shiftVirtualKey);
                         if (handler(stroke))
                         {
                             // Suppress the matching physical key-up as well as key-down;
@@ -55,6 +80,13 @@ namespace CodexKeyboardScroll
                 }
             }
             return CallNextHookEx(hook, code, wParam, lParam);
+        }
+
+        private static bool IsShiftKey(uint virtualKey)
+        {
+            return virtualKey == VkShift
+                || virtualKey == VkLeftShift
+                || virtualKey == VkRightShift;
         }
 
         public void Dispose()
