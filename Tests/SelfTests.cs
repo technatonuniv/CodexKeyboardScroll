@@ -18,6 +18,8 @@ namespace CodexKeyboardScroll
         {
             int failures = 0;
             TestWindowLayout(ref failures);
+            TestReplySelection(ref failures);
+            TestFocusToggle(ref failures);
             TestTypingKeys(ref failures);
             TestSpaceScrolling(ref failures);
             TestKeyboardHookFiltering(ref failures);
@@ -58,6 +60,14 @@ namespace CodexKeyboardScroll
             Check(ref failures,
                 !WindowLayout.IsTranscriptClick(normal, new Point(700, 740), invalidComposer));
 
+            var question = new NativeInput.Rect(350, 300, 1050, 750);
+            Check(ref failures,
+                WindowLayout.IsTranscriptClick(normal, new Point(700, 250), question, true));
+            Check(ref failures,
+                !WindowLayout.IsTranscriptClick(normal, new Point(700, 320), question, true));
+            Check(ref failures,
+                !WindowLayout.IsTranscriptClick(normal, new Point(700, 700), question, true));
+
             var narrow = new NativeInput.Rect(20, 30, 720, 730);
             Check(ref failures, WindowLayout.IsTranscriptClick(narrow, new Point(200, 300)));
             Check(ref failures, !WindowLayout.IsTranscriptClick(narrow, new Point(10, 300)));
@@ -67,6 +77,59 @@ namespace CodexKeyboardScroll
             Check(ref failures, Contains(normal, scroll));
             Check(ref failures, Contains(normal, composerTarget));
             Check(ref failures, composerTarget.Y > scroll.Y);
+        }
+
+        private static void TestReplySelection(ref int failures)
+        {
+            var window = new System.Windows.Rect(0, 0, 1920, 1042);
+            var main = new System.Windows.Rect(504, 918, 891, 55);
+            var answer = new System.Windows.Rect(545, 800, 712, 25);
+            double mainScore;
+            double replyScore;
+            double ignored;
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, "Ask Codex", true, true, false, out mainScore));
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                answer, window, "Or write your own response", true, true, false, out replyScore));
+            Check(ref failures, replyScore > mainScore);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                answer, window, "\u041e\u0442\u0432\u0435\u0442...", true, true, false, out replyScore));
+            Check(ref failures, replyScore > mainScore);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                answer, window, "Answer...", true, true, false, out replyScore));
+            Check(ref failures, replyScore > mainScore);
+
+            var upperAnswer = new System.Windows.Rect(545, 400, 712, 25);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                upperAnswer, window, "Your response", true, true, false, out replyScore));
+            Check(ref failures, replyScore > mainScore);
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                upperAnswer, window, "Search", true, true, false, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                answer, window, "Answer", false, true, false, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                answer, window, "Answer", true, false, false, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                answer, window, "Answer", true, true, true, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                new System.Windows.Rect(545, 1100, 712, 25), window,
+                "Answer", true, true, false, out ignored));
+
+            var offsetWindow = new System.Windows.Rect(-1920, 0, 1920, 1042);
+            var offsetAnswer = new System.Windows.Rect(-1375, 800, 712, 25);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                offsetAnswer, offsetWindow, "Answer", true, true, false, out replyScore));
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, string.Empty, true, true, false, out mainScore));
+        }
+
+        private static void TestFocusToggle(ref int failures)
+        {
+            Check(ref failures, !ScrollApplicationContext.ShouldFocusInput(false, false, false));
+            Check(ref failures, ScrollApplicationContext.ShouldFocusInput(true, false, false));
+            Check(ref failures, ScrollApplicationContext.ShouldFocusInput(false, true, false));
+            Check(ref failures, ScrollApplicationContext.ShouldFocusInput(true, true, false));
+            Check(ref failures, !ScrollApplicationContext.ShouldFocusInput(false, true, true));
         }
 
         private static void TestTypingKeys(ref int failures)

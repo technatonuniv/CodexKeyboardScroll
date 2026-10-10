@@ -227,6 +227,29 @@ namespace CodexKeyboardScroll
             return FocusTarget(true, stroke);
         }
 
+        internal static bool FocusInput(IntPtr window, Rect bounds)
+        {
+            Rect windowBounds;
+            if (window != GetForegroundWindow() || !GetWindowRect(window, out windowBounds)
+                || bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top
+                || bounds.Left < windowBounds.Left || bounds.Right > windowBounds.Right
+                || bounds.Top < windowBounds.Top || bounds.Bottom > windowBounds.Bottom)
+            {
+                return false;
+            }
+            return FocusPoint(new Point(
+                bounds.Left + Math.Min(30, (bounds.Right - bounds.Left) / 2),
+                bounds.Top + (bounds.Bottom - bounds.Top) / 2), null);
+        }
+
+        internal static bool ReplayNavigationKey(ScrollCommand command)
+        {
+            uint key = command == ScrollCommand.LineUp ? 0x26u
+                : command == ScrollCommand.LineDown ? 0x28u
+                : command == ScrollCommand.PageUp ? 0x21u : 0x22u;
+            return ReplayKeyboard(new KeyboardStroke(key, 0, 0x01, false, 0));
+        }
+
         internal static bool ReplayKeyboard(KeyboardStroke stroke)
         {
             Input[] inputs = { KeyboardInput(stroke, false), KeyboardInput(stroke, true) };
@@ -287,13 +310,19 @@ namespace CodexKeyboardScroll
         {
             IntPtr window = GetForegroundWindow();
             Rect rect;
-            PointNative original;
-            if (window == IntPtr.Zero || !GetWindowRect(window, out rect) || !GetCursorPos(out original))
+            if (window == IntPtr.Zero || !GetWindowRect(window, out rect))
             {
                 return false;
             }
 
             Point target = composer ? WindowLayout.ComposerTarget(rect) : WindowLayout.ScrollTarget(rect);
+            return FocusPoint(target, replay);
+        }
+
+        private static bool FocusPoint(Point target, KeyboardStroke? replay)
+        {
+            PointNative original;
+            if (!GetCursorPos(out original)) return false;
             // Mouse focus, pointer restoration, and optional key replay are submitted as
             // one ordered input batch so the first typed character cannot beat the click.
             var inputs = new List<Input>

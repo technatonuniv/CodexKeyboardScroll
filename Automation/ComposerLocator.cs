@@ -11,6 +11,9 @@ namespace CodexKeyboardScroll
         private AutomationElement composer;
         private AutomationElement composerContainer;
         private IntPtr cachedWindow;
+        private IntPtr pendingRefreshWindow;
+        private int cachedProcessId;
+        private bool replyInput;
         private int lastRefreshTick;
         private int refreshRunning;
         private bool hasCompletedRefresh;
@@ -31,7 +34,62 @@ namespace CodexKeyboardScroll
             }
         }
 
-        internal void RequestRefresh(IntPtr window)
+        internal bool IsRefreshing
+        {
+            get { return Interlocked.CompareExchange(ref refreshRunning, 0, 0) != 0; }
+        }
+
+        internal bool HasReplyInput(IntPtr window)
+        {
+            lock (sync)
+            {
+                return cachedWindow == window && composer != null && replyInput;
+            }
+        }
+
+        internal bool IsReplyFocused(IntPtr window)
+        {
+            AutomationElement element;
+            lock (sync)
+            {
+                element = cachedWindow == window && replyInput ? composer : null;
+            }
+            try
+            {
+                return element != null && element.Current.HasKeyboardFocus;
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error)) throw;
+                return false;
+            }
+        }
+
+        internal bool HasFocusedInput(IntPtr window)
+        {
+            int processId;
+            lock (sync)
+            {
+                processId = cachedWindow == window ? cachedProcessId : 0;
+            }
+            if (processId == 0) return false;
+
+            try
+            {
+                AutomationElement focused = AutomationElement.FocusedElement;
+                return focused != null
+                    && focused.Current.ProcessId == processId
+                    && focused.Current.ControlType == ControlType.Edit
+                    && focused.Current.IsEnabled;
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error)) throw;
+                return false;
+            }
+        }
+
+        internal void RequestRefresh(IntPtr window, bool force = false)
         {
             if (disposed || window == IntPtr.Zero)
             {
@@ -41,25 +99,45 @@ namespace CodexKeyboardScroll
             int now = Environment.TickCount;
             lock (sync)
             {
-                if (cachedWindow == window && unchecked(now - lastRefreshTick) < 2000)
+                if (!force && cachedWindow == window && unchecked(now - lastRefreshTick) < 2000)
                 {
                     return;
                 }
+                if (Interlocked.CompareExchange(ref refreshRunning, 1, 0) != 0)
+                {
+                    if (force || cachedWindow != window) pendingRefreshWindow = window;
+                    return;
+                }
                 lastRefreshTick = now;
-            }
-
-            if (Interlocked.CompareExchange(ref refreshRunning, 1, 0) != 0)
-            {
-                return;
             }
 
             // Chromium accessibility traversal can block briefly. Keeping it off the UI
             // thread prevents missed keyboard hooks and a frozen tray menu.
             ThreadPool.QueueUserWorkItem(delegate
             {
-                try { Refresh(window); }
-                finally { Interlocked.Exchange(ref refreshRunning, 0); }
+                RunRefresh(window);
             });
+        }
+
+        private void RunRefresh(IntPtr window)
+        {
+            try { Refresh(window); }
+            finally
+            {
+                IntPtr next;
+                lock (sync)
+                {
+                    next = disposed ? IntPtr.Zero : pendingRefreshWindow;
+                    pendingRefreshWindow = IntPtr.Zero;
+                    if (next == IntPtr.Zero) Interlocked.Exchange(ref refreshRunning, 0);
+                }
+                // A hotkey refresh must not be lost behind an older traversal that
+                // began before the question appeared or the foreground window changed.
+                if (next != IntPtr.Zero)
+                {
+                    ThreadPool.QueueUserWorkItem(delegate { RunRefresh(next); });
+                }
+            }
         }
 
         internal bool TryFocus(IntPtr window)
@@ -78,6 +156,11 @@ namespace CodexKeyboardScroll
 
             try
             {
+                if (element.Current.IsOffscreen || !element.Current.IsEnabled)
+                {
+                    RequestRefresh(window, true);
+                    return false;
+                }
                 element.SetFocus();
                 Thread.Sleep(10);
                 if (element.Current.HasKeyboardFocus)
@@ -89,7 +172,22 @@ namespace CodexKeyboardScroll
             {
             }
 
-            RequestRefresh(window);
+            // If UIA cannot focus an exposed edit, target that edit's own bounds.
+            // The generic bottom-of-window fallback would miss a pending reply.
+            try
+            {
+                NativeInput.Rect bounds;
+                if (TryConvertBounds(element.Current.BoundingRectangle, out bounds))
+                {
+                    return NativeInput.FocusInput(window, bounds);
+                }
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error)) throw;
+            }
+
+            RequestRefresh(window, true);
             return false;
         }
 
@@ -145,13 +243,17 @@ namespace CodexKeyboardScroll
         {
             AutomationElement found = null;
             AutomationElement container = null;
+            int processId = 0;
+            bool isReply = false;
             try
             {
                 AutomationElement root = AutomationElement.FromHandle(window);
                 if (root != null)
                 {
-                    found = FindBestComposer(root);
-                    container = FindComposerContainer(found);
+                    processId = root.Current.ProcessId;
+                    AutomationElement conversationComposer;
+                    found = FindBestComposer(root, out conversationComposer, out isReply);
+                    container = FindComposerContainer(found, conversationComposer, isReply);
                 }
             }
             catch
@@ -165,13 +267,18 @@ namespace CodexKeyboardScroll
             lock (sync)
             {
                 cachedWindow = window;
+                cachedProcessId = processId;
                 composer = found;
+                replyInput = isReply;
                 composerContainer = container;
                 hasCompletedRefresh = true;
             }
         }
 
-        private static AutomationElement FindComposerContainer(AutomationElement element)
+        private static AutomationElement FindComposerContainer(
+            AutomationElement element,
+            AutomationElement conversationComposer,
+            bool isReply)
         {
             if (element == null)
             {
@@ -181,14 +288,30 @@ namespace CodexKeyboardScroll
             try
             {
                 System.Windows.Rect editRect = element.Current.BoundingRectangle;
-                AutomationElement parent = TreeWalker.RawViewWalker.GetParent(element);
-                if (parent == null)
+                AutomationElement parent = element;
+                AutomationElement container = null;
+                System.Windows.Rect mainRect = conversationComposer == null
+                    ? System.Windows.Rect.Empty
+                    : conversationComposer.Current.BoundingRectangle;
+                for (int depth = 0; depth < (isReply ? 6 : 1); depth++)
                 {
-                    return null;
+                    parent = TreeWalker.RawViewWalker.GetParent(parent);
+                    if (parent == null) break;
+                    System.Windows.Rect parentRect = parent.Current.BoundingRectangle;
+                    if (!isReply)
+                    {
+                        return IsComposerContainer(parentRect, editRect) ? parent : null;
+                    }
+                    // Exclude the whole question card, including its options, from
+                    // reading mode, but never absorb the ordinary composer below it.
+                    if (mainRect.IsEmpty || !parentRect.Contains(editRect)
+                        || parentRect.Bottom > mainRect.Top + 2)
+                    {
+                        break;
+                    }
+                    container = parent;
                 }
-
-                System.Windows.Rect parentRect = parent.Current.BoundingRectangle;
-                return IsComposerContainer(parentRect, editRect) ? parent : null;
+                return container;
             }
             catch (Exception error)
             {
@@ -253,7 +376,10 @@ namespace CodexKeyboardScroll
                 || error is COMException;
         }
 
-        private static AutomationElement FindBestComposer(AutomationElement root)
+        private static AutomationElement FindBestComposer(
+            AutomationElement root,
+            out AutomationElement conversationComposer,
+            out bool isReply)
         {
             System.Windows.Rect rootRect = root.Current.BoundingRectangle;
             AutomationElementCollection edits = root.FindAll(
@@ -262,25 +388,34 @@ namespace CodexKeyboardScroll
 
             AutomationElement best = null;
             double bestScore = double.MinValue;
+            conversationComposer = null;
+            double mainScore = double.MinValue;
+            isReply = false;
             foreach (AutomationElement element in edits)
             {
                 try
                 {
                     System.Windows.Rect rect = element.Current.BoundingRectangle;
-                    if (!IsComposerCandidate(element, rect, rootRect))
+                    double score;
+                    string name = element.Current.Name;
+                    if (!TryScoreCandidate(rect, rootRect, name,
+                        element.Current.IsEnabled, element.Current.IsKeyboardFocusable,
+                        element.Current.IsOffscreen, out score))
                     {
                         continue;
                     }
 
-                    // Prefer a wide, focusable edit near the bottom of the window. Name
-                    // hints are secondary so localization does not become a requirement.
-                    double score = rect.Top + rect.Width;
-                    if (element.Current.IsKeyboardFocusable) score += 10000;
-                    if (HasComposerHint(element.Current.Name)) score += 20000;
+                    bool reply = HasReplyHint(name);
+                    if (!reply && score > mainScore)
+                    {
+                        conversationComposer = element;
+                        mainScore = score;
+                    }
                     if (score > bestScore)
                     {
                         best = element;
                         bestScore = score;
+                        isReply = reply;
                     }
                 }
                 catch (ElementNotAvailableException)
@@ -290,17 +425,38 @@ namespace CodexKeyboardScroll
             return best;
         }
 
-        private static bool IsComposerCandidate(
-            AutomationElement element,
+        internal static bool TryScoreCandidate(
             System.Windows.Rect rect,
-            System.Windows.Rect rootRect)
+            System.Windows.Rect rootRect,
+            string name,
+            bool enabled,
+            bool focusable,
+            bool offscreen,
+            out double score)
         {
-            return !rect.IsEmpty
-                && rect.Width >= 140
-                && rect.Height >= 18
-                && rect.Top >= rootRect.Top + rootRect.Height * 0.50
-                && rect.Bottom <= rootRect.Bottom + 2
-                && element.Current.IsEnabled;
+            bool reply = HasReplyHint(name);
+            score = double.MinValue;
+            if (rect.IsEmpty || rootRect.IsEmpty || rect.Width < 140 || rect.Height < 18
+                || rect.Top < rootRect.Top + (reply ? 55 : rootRect.Height * 0.50)
+                || rect.Bottom > rootRect.Bottom + 2 || rect.Left < rootRect.Left
+                || rect.Right > rootRect.Right + 2 || !enabled || !focusable || offscreen)
+            {
+                return false;
+            }
+
+            score = rect.Top - rootRect.Top + Math.Min(rect.Width, 10000);
+            if (HasComposerHint(name)) score += 20000;
+            if (reply) score += 100000;
+            return true;
+        }
+
+        private static bool HasReplyHint(string value)
+        {
+            string name = (value ?? string.Empty).ToLowerInvariant();
+            return name.Contains("answer")
+                || name.Contains("response")
+                || name.Contains("reply")
+                || name.Contains("\u043e\u0442\u0432\u0435\u0442");
         }
 
         private static bool HasComposerHint(string value)
@@ -321,6 +477,9 @@ namespace CodexKeyboardScroll
                 composer = null;
                 composerContainer = null;
                 cachedWindow = IntPtr.Zero;
+                pendingRefreshWindow = IntPtr.Zero;
+                cachedProcessId = 0;
+                replyInput = false;
                 hasCompletedRefresh = false;
             }
         }

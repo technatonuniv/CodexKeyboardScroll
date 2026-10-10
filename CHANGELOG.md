@@ -4,6 +4,15 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-10-10
+
+### Fixed
+
+- Made the focus shortcut enter a pending question's answer field immediately; the next press returns to the transcript.
+- Prioritized answer and custom response fields for the first-character typing handoff and targeted their own bounds when accessibility focus is unavailable.
+- Excluded question cards from reading mode and released navigation-key capture when an editable field gains focus.
+- Refreshed input discovery on the focus shortcut and avoided sending Escape to an open question.
+
 ## [2.0.4] - 2026-08-23
 
 ### Fixed

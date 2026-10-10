@@ -15,6 +15,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Restores transcript scrolling with `Up`, `Down`, `Page Up`, and `Page Down`.
 - Uses `Space` and `Shift+Space` for page scrolling by default.
 - Switches between the transcript and composer with one configurable shortcut.
+- Prioritizes the answer field when Codex asks a question during a task.
 - Automatically returns focus to the composer when a letter, number, or punctuation key is pressed in reading mode, while preserving the first typed character.
 - Locates the composer through Windows UI Automation, with a coordinate-based fallback.
 - Sends mouse-wheel input to the transcript without moving the user's pointer.
@@ -49,6 +50,11 @@ The current build is an unsigned local executable. Windows SmartScreen may displ
 5. Typing a letter, number, or punctuation mark in reading mode automatically focuses the composer and inserts that same character.
 
 The default focus shortcut is `Alt+F`. Available alternatives are `Ctrl+Alt+F` and `Ctrl+Shift+F`.
+
+When a question is open, the first shortcut press focuses its answer field, including
+the custom response field beneath suggested options. Press it again to return to the
+transcript. Typing from the transcript also targets the pending answer. Once the
+question is closed, focus switching returns to the ordinary composer.
 
 ## Tray menu
 
@@ -116,11 +122,11 @@ The optional startup setting is stored in the current user's standard Windows `R
 
 ## Focus and scrolling behavior
 
-The utility refreshes the Codex accessibility tree on a background worker and caches the composer. Composer focus is verified after every UI Automation focus request. If accessibility lookup is unavailable or the interface changes, a coordinate-based click is used as a fallback.
+The utility refreshes the Codex accessibility tree on a background worker and caches the preferred input. Visible answer and response fields take priority over the ordinary composer. The focus shortcut requests a fresh lookup so a newly opened or closed question is detected. Input focus is verified after every UI Automation focus request. If an exposed input cannot be focused through accessibility, its own bounds are used for the click fallback. A bottom-of-window fallback remains available when no input can be located.
 
 Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the Codex child window at the transcript coordinates, so the system pointer never moves or flickers.
 
-Manual click classification still uses the click position. If an unusual window layout is not classified correctly, use the focus shortcut.
+Manual click classification excludes the question card as well as the composer. Focusing an editable field with the mouse or Tab exits reading mode, preserving normal text editing with arrows and Space. If an unusual window layout is not classified correctly, use the focus shortcut.
 
 ## Hotkey recovery
 
