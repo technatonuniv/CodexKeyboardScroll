@@ -22,8 +22,10 @@ namespace CodexKeyboardScroll
             TestClaudeComposerSelection(ref failures);
             TestApplicationPolicy(ref failures);
             TestFocusToggle(ref failures);
+            TestTranscriptFocusSettlement(ref failures);
             TestTypingKeys(ref failures);
             TestSpaceScrolling(ref failures);
+            TestNavigationScrolling(ref failures);
             TestNavigationReplay(ref failures);
             TestKeyboardHookFiltering(ref failures);
             TestModifierStateClassification(ref failures);
@@ -134,6 +136,65 @@ namespace CodexKeyboardScroll
             Check(ref failures, ScrollApplicationContext.ShouldFocusInput(false, true, false));
             Check(ref failures, ScrollApplicationContext.ShouldFocusInput(true, true, false));
             Check(ref failures, !ScrollApplicationContext.ShouldFocusInput(false, true, true));
+        }
+
+        private static void TestTranscriptFocusSettlement(ref int failures)
+        {
+            // A click can return before Chromium has moved focus from its editor.
+            // Even an early non-edit observation must wait for the settle period.
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                0, true, true, false) == TranscriptFocusState.Waiting);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                99, true, true, false) == TranscriptFocusState.Waiting);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                100, true, true, false) == TranscriptFocusState.Ready);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                999, true, true, false) == TranscriptFocusState.Ready);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                1000, true, true, false) == TranscriptFocusState.Cancelled);
+
+            foreach (int elapsed in new[] { 100, 999 })
+            {
+                Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                    elapsed, true, false, false) == TranscriptFocusState.Waiting);
+                Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                    elapsed, true, false, true) == TranscriptFocusState.Waiting);
+                Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                    elapsed, true, true, true) == TranscriptFocusState.Waiting);
+            }
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                1000, true, false, false) == TranscriptFocusState.Cancelled);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                1000, true, true, true) == TranscriptFocusState.Cancelled);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                100, false, true, false) == TranscriptFocusState.Cancelled);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                0, false, false, false) == TranscriptFocusState.Cancelled);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                -1, true, true, false) == TranscriptFocusState.Cancelled);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                unchecked(int.MaxValue + 1), true, true, false) == TranscriptFocusState.Cancelled);
+
+            // TickCount rollover remains valid when unchecked subtraction produces
+            // a positive short interval; a negative elapsed interval is rejected.
+            int acrossTickRollover = unchecked((int.MinValue + 50) - (int.MaxValue - 49));
+            Check(ref failures, acrossTickRollover == 100);
+            Check(ref failures, ScrollApplicationContext.GetTranscriptFocusState(
+                acrossTickRollover, true, true, false) == TranscriptFocusState.Ready);
+
+            // Observed Chromium sequence: Edit, transient unknown focus, then Group.
+            var sequence = new[]
+            {
+                ScrollApplicationContext.GetTranscriptFocusState(0, true, true, true),
+                ScrollApplicationContext.GetTranscriptFocusState(120, true, true, true),
+                ScrollApplicationContext.GetTranscriptFocusState(180, true, false, false),
+                ScrollApplicationContext.GetTranscriptFocusState(240, true, true, false)
+            };
+            Check(ref failures, sequence.SequenceEqual(new[]
+            {
+                TranscriptFocusState.Waiting, TranscriptFocusState.Waiting,
+                TranscriptFocusState.Waiting, TranscriptFocusState.Ready
+            }));
         }
 
         private static void TestClaudeComposerSelection(ref int failures)
@@ -259,6 +320,49 @@ namespace CodexKeyboardScroll
                 !PrintableKeyClassifier.SpaceScrollCommand(0x20, true, true, true).HasValue);
             Check(ref failures,
                 !PrintableKeyClassifier.SpaceScrollCommand(0x41, true, true, false).HasValue);
+        }
+
+        private static void TestNavigationScrolling(ref int failures)
+        {
+            foreach (uint modifier in new uint[] { 0x10, 0x11, 0x12, 0x5B, 0x5C,
+                0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5 })
+            {
+                Check(ref failures, PrintableKeyClassifier.IsModifierKey(modifier));
+            }
+            Check(ref failures, !PrintableKeyClassifier.IsModifierKey(0x41));
+            Check(ref failures, !PrintableKeyClassifier.IsModifierKey(0x20));
+            Check(ref failures, !PrintableKeyClassifier.IsModifierKey(0x26));
+
+            uint[] keys = { 0x26, 0x28, 0x21, 0x22 };
+            ScrollCommand[] commands =
+            {
+                ScrollCommand.LineUp, ScrollCommand.LineDown,
+                ScrollCommand.PageUp, ScrollCommand.PageDown
+            };
+            for (int index = 0; index < keys.Length; index++)
+            {
+                uint key = keys[index];
+                Check(ref failures, PrintableKeyClassifier.NavigationScrollCommand(
+                    key, false, false) == commands[index]);
+                Check(ref failures, !PrintableKeyClassifier.IsTypingKey(key, false));
+                Check(ref failures, !PrintableKeyClassifier.IsTypingKey(key, true));
+                // Modified navigation belongs to the app (selection, shortcuts).
+                Check(ref failures, !PrintableKeyClassifier.NavigationScrollCommand(
+                    key, true, false).HasValue);
+                Check(ref failures, !PrintableKeyClassifier.NavigationScrollCommand(
+                    key, false, true).HasValue);
+                Check(ref failures, !PrintableKeyClassifier.NavigationScrollCommand(
+                    key, true, true).HasValue);
+            }
+
+            foreach (uint key in new uint[]
+            {
+                0x41, 0x30, 0xBA, 0x20, 0x25, 0x27, 0x23, 0x24, 0x0D
+            })
+            {
+                Check(ref failures, !PrintableKeyClassifier.NavigationScrollCommand(
+                    key, false, false).HasValue);
+            }
         }
 
         private static void TestKeyboardHookFiltering(ref int failures)

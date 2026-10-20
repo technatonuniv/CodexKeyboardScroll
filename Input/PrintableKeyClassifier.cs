@@ -2,6 +2,27 @@ namespace CodexKeyboardScroll
 {
     internal static class PrintableKeyClassifier
     {
+        internal static bool IsModifierKey(uint virtualKey)
+        {
+            return virtualKey == 0x10 || virtualKey == 0x11 || virtualKey == 0x12
+                || virtualKey == 0x5B || virtualKey == 0x5C
+                || (virtualKey >= 0xA0 && virtualKey <= 0xA5);
+        }
+
+        internal static ScrollCommand? NavigationScrollCommand(
+            uint virtualKey, bool shiftDown, bool commandModifierDown)
+        {
+            if (shiftDown || commandModifierDown) return null;
+            switch (virtualKey)
+            {
+                case 0x26: return ScrollCommand.LineUp;
+                case 0x28: return ScrollCommand.LineDown;
+                case 0x21: return ScrollCommand.PageUp;
+                case 0x22: return ScrollCommand.PageDown;
+                default: return null;
+            }
+        }
+
         internal static ScrollCommand? SpaceScrollCommand(
             uint virtualKey,
             bool spaceScroll,

@@ -11,6 +11,11 @@ All notable changes to Codex Keyboard Scroll are documented here.
 - Added optional support for the Claude desktop app on Windows, controlled by the `Claude` tray-menu switch and disabled by default.
 - Persisted the Claude setting and limited Claude input discovery to recognized composers, without guessing an input position when accessibility discovery fails.
 
+### Fixed
+
+- Waited for confirmed transcript focus before enabling reading mode, so Claude's delayed accessibility focus update cannot release arrow-key capture and trigger message-card navigation.
+- Routed navigation pressed during that focus transition directly to transcript scrolling while preserving modifier keys and the typing handoff.
+
 ## [2.0.5] - 2026-10-10
 
 ### Fixed

@@ -143,6 +143,11 @@ Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL`
 
 Manual click classification excludes the question card as well as the composer. Focusing an editable field with the mouse or Tab exits reading mode, preserving normal text editing with arrows and Space. If an unusual window layout is not classified correctly, use the focus shortcut.
 
+After the shortcut requests transcript focus, the utility waits for a confirmed
+focus change before entering reading mode. This accommodates delayed accessibility
+updates in Claude. Navigation pressed during the transition already scrolls the
+transcript instead of moving between message cards.
+
 ## Hotkey recovery
 
 If all supported focus shortcuts are temporarily occupied, registration is retried every two seconds. Error notifications are limited to one every 30 seconds. The utility recovers automatically after a shortcut becomes available; restarting is not required.

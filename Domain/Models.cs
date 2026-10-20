@@ -7,6 +7,13 @@ namespace CodexKeyboardScroll
         Claude
     }
 
+    internal enum TranscriptFocusState
+    {
+        Waiting,
+        Ready,
+        Cancelled
+    }
+
     internal enum ScrollCommand
     {
         LineUp,

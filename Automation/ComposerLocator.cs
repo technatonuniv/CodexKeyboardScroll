@@ -67,6 +67,13 @@ namespace CodexKeyboardScroll
 
         internal bool HasFocusedInput(IntPtr window)
         {
+            bool focusedInput;
+            return TryGetFocusedInput(window, out focusedInput) && focusedInput;
+        }
+
+        internal bool TryGetFocusedInput(IntPtr window, out bool focusedInput)
+        {
+            focusedInput = false;
             int processId;
             lock (sync)
             {
@@ -78,10 +85,18 @@ namespace CodexKeyboardScroll
             try
             {
                 AutomationElement focused = AutomationElement.FocusedElement;
-                return focused != null
-                    && focused.Current.ControlType == ControlType.Edit
-                    && focused.Current.IsEnabled
-                    && BelongsToWindow(focused, window);
+                if (focused == null || !focused.Current.IsEnabled
+                    || !BelongsToWindow(focused, window))
+                {
+                    return false;
+                }
+
+                bool isInput = focused.Current.ControlType == ControlType.Edit;
+                // Accessibility queries can outlive a foreground-window switch.
+                // Unknown focus must not be mistaken for confirmed transcript focus.
+                if (window != NativeInput.GetForegroundWindow()) return false;
+                focusedInput = isInput;
+                return true;
             }
             catch (Exception error)
             {

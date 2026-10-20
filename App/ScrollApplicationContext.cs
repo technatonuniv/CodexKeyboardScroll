@@ -37,6 +37,8 @@ namespace CodexKeyboardScroll
         private IntPtr readingWindow;
         private IntPtr focusToggleWindow;
         private IntPtr pendingClickWindow;
+        private bool pendingTranscriptFocus;
+        private int transcriptFocusTick;
 
         internal ScrollApplicationContext()
         {
@@ -128,6 +130,7 @@ namespace CodexKeyboardScroll
             bool leftDown = (NativeInput.GetAsyncKeyState(NativeInput.VkLeftButton) & 0x8000) != 0;
             if (leftDown && !previousLeftButtonDown)
             {
+                if (pendingTranscriptFocus) CancelPendingInput();
                 NativeInput.PointNative point;
                 if (NativeInput.GetCursorPos(out point))
                 {
@@ -179,6 +182,7 @@ namespace CodexKeyboardScroll
         {
             focusToggleTimer.Stop();
             focusToggleWindow = IntPtr.Zero;
+            pendingTranscriptFocus = false;
             hasPendingClick = false;
             pendingClickWindow = IntPtr.Zero;
         }
@@ -305,6 +309,7 @@ namespace CodexKeyboardScroll
             ObserveWindow(window);
             if (toolEnabled && IsEnabledWindow(window) && CanControlWindow(window))
             {
+                CancelPendingInput();
                 focusToggleTick = Environment.TickCount;
                 focusToggleWindow = window;
                 composerLocator.RequestRefresh(window, true);
@@ -315,6 +320,11 @@ namespace CodexKeyboardScroll
         private void CompleteFocusToggle(object sender, EventArgs e)
         {
             IntPtr window = NativeInput.GetForegroundWindow();
+            if (pendingTranscriptFocus)
+            {
+                CompleteTranscriptFocus(window);
+                return;
+            }
             if (!toolEnabled || focusToggleWindow != window || !IsEnabledWindow(window)
                 || !CanControlWindow(window))
             {
@@ -343,12 +353,50 @@ namespace CodexKeyboardScroll
 
             if (!ShouldFocusInput(readingMode, hasReply, composerLocator.IsReplyFocused(window)))
             {
-                if (NativeInput.FocusTranscript(window)) SetReadingMode(true);
+                hasPendingClick = false;
+                if (NativeInput.FocusTranscript(window))
+                {
+                    // SendInput returns before Chromium publishes its new focus.
+                    // Wait for confirmed transcript focus instead of immediately
+                    // entering reading mode and tearing it down on the stale edit.
+                    focusToggleWindow = window;
+                    transcriptFocusTick = Environment.TickCount;
+                    pendingTranscriptFocus = true;
+                    focusToggleTimer.Start();
+                }
                 return;
             }
 
             SetReadingMode(false);
             FocusComposer(window);
+        }
+
+        private void CompleteTranscriptFocus(IntPtr window)
+        {
+            int elapsed = unchecked(Environment.TickCount - transcriptFocusTick);
+            bool validTarget = toolEnabled && window == focusToggleWindow
+                && IsEnabledWindow(window) && CanControlWindow(window);
+            bool focusedInput = false;
+            bool focusKnown = validTarget && elapsed >= 100 && elapsed < 1000
+                && composerLocator.TryGetFocusedInput(window, out focusedInput);
+            TranscriptFocusState state = GetTranscriptFocusState(
+                elapsed, validTarget, focusKnown, focusedInput);
+            if (state == TranscriptFocusState.Waiting) return;
+
+            CancelPendingInput();
+            if (state == TranscriptFocusState.Ready && IsEnabledWindow(window))
+            {
+                SetReadingMode(true);
+            }
+        }
+
+        internal static TranscriptFocusState GetTranscriptFocusState(
+            int elapsed, bool validTarget, bool focusKnown, bool focusedInput)
+        {
+            if (!validTarget || elapsed < 0 || elapsed >= 1000)
+                return TranscriptFocusState.Cancelled;
+            return elapsed >= 100 && focusKnown && !focusedInput
+                ? TranscriptFocusState.Ready : TranscriptFocusState.Waiting;
         }
 
         internal static bool ShouldFocusInput(bool reading, bool hasReply, bool replyFocused)
@@ -372,6 +420,34 @@ namespace CodexKeyboardScroll
         private bool HandleKeyboardStroke(KeyboardStroke stroke)
         {
             IntPtr window = NativeInput.GetForegroundWindow();
+            if (pendingTranscriptFocus && toolEnabled && focusToggleWindow == window
+                && IsEnabledWindow(window) && CanControlWindow(window))
+            {
+                if (PrintableKeyClassifier.IsModifierKey(stroke.VirtualKey)) return false;
+                bool commandDown = NativeInput.IsCommandModifierDown();
+                bool shift = NativeInput.IsShiftModifierDown(stroke.ShiftDown);
+                ScrollCommand? navigation = PrintableKeyClassifier.NavigationScrollCommand(
+                    stroke.VirtualKey, shift, commandDown)
+                    ?? PrintableKeyClassifier.SpaceScrollCommand(
+                        stroke.VirtualKey, settings.SpaceScroll, shift, commandDown);
+                if (navigation.HasValue)
+                {
+                    // An immediate arrow after Alt+F already expresses transcript
+                    // intent. Route it as a wheel event while focus is settling so
+                    // Claude never receives it as message-card navigation.
+                    return NativeInput.ScrollWindow(window,
+                        ScrollProfile.WheelDelta(navigation.Value, settings.ScrollSpeedLevel));
+                }
+
+                CancelPendingInput();
+                if (!commandDown
+                    && PrintableKeyClassifier.IsTypingKey(stroke.VirtualKey, settings.SpaceScroll)
+                    && composerLocator.TryFocus(window))
+                {
+                    return IsEnabledWindow(window) && NativeInput.ReplayKeyboard(stroke);
+                }
+                return false;
+            }
             if (!toolEnabled || !readingMode || readingWindow != window
                 || !IsEnabledWindow(window) || !CanControlWindow(window))
             {
