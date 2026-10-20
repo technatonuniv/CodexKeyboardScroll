@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=الخدمة
 MenuUtilityEnabled=الأداة مفعّلة
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=اختصار التركيز
 MenuScrollSpeed=سرعة التمرير: {0}/10
 MenuSpaceScroll=مفتاح المسافة يمرر الصفحة

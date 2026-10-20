@@ -11,6 +11,7 @@ namespace CodexKeyboardScroll
         internal FocusShortcut FocusShortcut = FocusShortcut.AltF;
         internal decimal ScrollSpeedLevel = ScrollProfile.DefaultLevel;
         internal bool SpaceScroll = true;
+        internal bool ClaudeEnabled;
         internal string LanguageCode = LocalizationManager.SystemLanguageCode;
         internal bool AutomaticUpdateChecks;
         internal DateTime? LastUpdateCheckUtc;
@@ -65,6 +66,11 @@ namespace CodexKeyboardScroll
                 && bool.TryParse(value, out flag))
             {
                 settings.SpaceScroll = flag;
+            }
+            else if (key.Equals("ClaudeEnabled", StringComparison.OrdinalIgnoreCase)
+                && bool.TryParse(value, out flag))
+            {
+                settings.ClaudeEnabled = flag;
             }
             else if (key.Equals("Language", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(value))
@@ -123,6 +129,7 @@ namespace CodexKeyboardScroll
                 "FocusShortcut=" + FocusShortcut,
                 "ScrollSpeed=" + ScrollProfile.DisplayLevel(ScrollSpeedLevel),
                 "SpaceScroll=" + SpaceScroll,
+                "ClaudeEnabled=" + ClaudeEnabled,
                 "Language=" + LanguageCode,
                 "AutomaticUpdateChecks=" + AutomaticUpdateChecks,
                 "LastUpdateCheckUtc=" + (LastUpdateCheckUtc.HasValue

@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Servis
 MenuUtilityEnabled=Yardımcı program etkin
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Odak kısayolu
 MenuScrollSpeed=Kaydırma hızı: {0}/10
 MenuSpaceScroll=Boşluk tuşu sayfayı kaydırır

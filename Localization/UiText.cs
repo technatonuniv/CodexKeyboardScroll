@@ -7,6 +7,7 @@ namespace CodexKeyboardScroll
         SummaryFormat,
         MenuService,
         MenuUtilityEnabled,
+        MenuClaudeEnabled,
         MenuFocusShortcut,
         MenuScrollSpeed,
         MenuSpaceScroll,

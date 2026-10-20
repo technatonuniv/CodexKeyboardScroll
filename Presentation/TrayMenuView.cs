@@ -23,6 +23,7 @@ namespace CodexKeyboardScroll
         private readonly ToolStripMenuItem automaticUpdatesItem;
         private readonly ToolStripMenuItem updateStatusItem;
         private readonly ToolStripMenuItem enabledItem;
+        private readonly ToolStripMenuItem claudeEnabledItem;
         private readonly ToolStripMenuItem shortcutMenu;
         private readonly ToolStripMenuItem speedMenu;
         private readonly ToolStripMenuItem spaceScrollItem;
@@ -90,6 +91,8 @@ namespace CodexKeyboardScroll
             });
 
             enabledItem = CheckItem(true);
+            claudeEnabledItem = CheckItem(settings.ClaudeEnabled);
+            claudeEnabledItem.Name = "claudeEnabledItem";
             shortcutMenu = new ToolStripMenuItem { Name = "shortcutMenu" };
             shortcutItems = new[]
             {
@@ -129,6 +132,7 @@ namespace CodexKeyboardScroll
                 serviceMenu,
                 new ToolStripSeparator(),
                 enabledItem,
+                claudeEnabledItem,
                 new ToolStripSeparator(),
                 shortcutMenu,
                 speedMenu,
@@ -140,6 +144,7 @@ namespace CodexKeyboardScroll
             });
 
             enabledItem.Click += delegate { Raise(EnabledChanged, enabledItem.Checked); };
+            claudeEnabledItem.Click += delegate { Raise(ClaudeEnabledChanged, claudeEnabledItem.Checked); };
             spaceScrollItem.Click += delegate { Raise(SpaceScrollChanged, spaceScrollItem.Checked); };
             startupItem.Click += delegate { Raise(StartupChanged, startupItem.Checked); };
             automaticUpdatesItem.Click += delegate
@@ -176,6 +181,7 @@ namespace CodexKeyboardScroll
         internal ContextMenuStrip Menu { get { return menu; } }
 
         internal event Action<bool> EnabledChanged;
+        internal event Action<bool> ClaudeEnabledChanged;
         internal event Action<FocusShortcut> ShortcutChanged;
         internal event Action<decimal> SpeedChanged;
         internal event Action<bool> SpaceScrollChanged;
@@ -195,6 +201,7 @@ namespace CodexKeyboardScroll
             ApplyDropDownDirection(menu.Items, localizer.IsRightToLeft);
             serviceMenu.Text = localizer.Text(UiText.MenuService);
             enabledItem.Text = localizer.Text(UiText.MenuUtilityEnabled);
+            claudeEnabledItem.Text = localizer.Text(UiText.MenuClaudeEnabled);
             shortcutMenu.Text = localizer.Text(UiText.MenuFocusShortcut);
             speedMenu.Text = localizer.Format(
                 UiText.MenuScrollSpeed,
@@ -229,6 +236,7 @@ namespace CodexKeyboardScroll
         {
             suppressEvents = true;
             enabledItem.Checked = state.Mode != ApplicationMode.Disabled;
+            claudeEnabledItem.Checked = settings.ClaudeEnabled;
             spaceScrollItem.Checked = settings.SpaceScroll;
             startupItem.Checked = state.StartupEnabled;
             automaticUpdatesItem.Checked = settings.AutomaticUpdateChecks;

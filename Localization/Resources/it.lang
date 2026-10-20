@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Servizio
 MenuUtilityEnabled=Utilità attiva
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Scorciatoia per lo stato attivo
 MenuScrollSpeed=Velocità di scorrimento: {0}/10
 MenuSpaceScroll=La barra spaziatrice scorre la pagina

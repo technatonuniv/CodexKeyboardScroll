@@ -21,12 +21,12 @@ namespace CodexKeyboardScroll
         private const int PageDownId = 104;
         private const int SpaceId = 105;
 
-        private readonly Action<ScrollCommand> scrollHandler;
+        private readonly Action<ScrollCommand, uint> scrollHandler;
         private readonly Action focusHandler;
         private readonly List<int> scrollIds = new List<int>();
         private bool disposed;
 
-        internal HotkeyWindow(Action<ScrollCommand> scrollHandler, Action focusHandler)
+        internal HotkeyWindow(Action<ScrollCommand, uint> scrollHandler, Action focusHandler)
         {
             this.scrollHandler = scrollHandler;
             this.focusHandler = focusHandler;
@@ -143,11 +143,11 @@ namespace CodexKeyboardScroll
             switch (message.WParam.ToInt32())
             {
                 case FocusToggleId: focusHandler(); break;
-                case UpId: scrollHandler(ScrollCommand.LineUp); break;
-                case DownId: scrollHandler(ScrollCommand.LineDown); break;
-                case PageUpId: scrollHandler(ScrollCommand.PageUp); break;
-                case PageDownId:
-                case SpaceId: scrollHandler(ScrollCommand.PageDown); break;
+                case UpId: scrollHandler(ScrollCommand.LineUp, (uint)Keys.Up); break;
+                case DownId: scrollHandler(ScrollCommand.LineDown, (uint)Keys.Down); break;
+                case PageUpId: scrollHandler(ScrollCommand.PageUp, (uint)Keys.PageUp); break;
+                case PageDownId: scrollHandler(ScrollCommand.PageDown, (uint)Keys.PageDown); break;
+                case SpaceId: scrollHandler(ScrollCommand.PageDown, (uint)Keys.Space); break;
             }
         }
 

@@ -1,6 +1,6 @@
 # Codex Keyboard Scroll
 
-An unofficial Windows keyboard navigation and focus utility for the Codex desktop app. It restores transcript scrolling and adds configurable controls for switching between the conversation transcript and composer.
+An unofficial Windows keyboard navigation and focus utility for the Codex desktop app, with optional support for the Claude desktop app. It restores transcript scrolling and adds configurable controls for switching between the conversation transcript and composer.
 
 The project was originally created in response to [openai/codex#39851](https://github.com/openai/codex/issues/39851). Its focus switching, reading mode, typing handoff, and navigation settings remain useful independently of that upstream regression.
 
@@ -17,7 +17,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Switches between the transcript and composer with one configurable shortcut.
 - Prioritizes the answer field when Codex asks a question during a task.
 - Automatically returns focus to the composer when a letter, number, or punctuation key is pressed in reading mode, while preserving the first typed character.
-- Locates the composer through Windows UI Automation, with a coordinate-based fallback.
+- Locates the composer through Windows UI Automation, with a coordinate-based fallback in Codex.
 - Sends mouse-wheel input to the transcript without moving the user's pointer.
 - Automatically retries hotkey registration after temporary shortcut conflicts.
 - Provides a modern, high-DPI tray menu with a 0.25–10 scroll-speed scale.
@@ -25,12 +25,13 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Includes 18 built-in interface languages and follows the Windows display language by default.
 - Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
 - Can optionally start with Windows; this is disabled by default.
+- Can optionally work in Claude through the `Claude` tray-menu switch; this is disabled by default.
 - Stores settings in a portable INI file next to the executable.
 
 ## Requirements
 
 - Windows 10
-- ChatGPT/Codex desktop app
+- ChatGPT/Codex desktop app, or Claude desktop app with the optional `Claude` setting enabled
 - .NET Framework 4.8
 
 The current build is an unsigned local executable. Windows SmartScreen may display a warning when it is downloaded from GitHub.
@@ -51,7 +52,12 @@ The current build is an unsigned local executable. Windows SmartScreen may displ
 
 The default focus shortcut is `Alt+F`. Available alternatives are `Ctrl+Alt+F` and `Ctrl+Shift+F`.
 
-When a question is open, the first shortcut press focuses its answer field, including
+To use the same controls in the Claude desktop app for Windows, enable `Claude` in
+the tray menu. This setting is saved across restarts and can be turned off at any
+time. It applies to the native desktop app; browser tabs and Claude Code terminals
+are outside its scope.
+
+When a question is open in Codex, the first shortcut press focuses its answer field, including
 the custom response field beneath suggested options. Press it again to return to the
 transcript. Typing from the transcript also targets the pending answer. Once the
 question is closed, focus switching returns to the ordinary composer.
@@ -83,6 +89,7 @@ menu and opens the latest GitHub release.
 Other menu items allow you to:
 
 - enable or disable the utility;
+- enable or disable optional Claude support with the item named `Claude`;
 - choose the focus shortcut;
 - select a scroll speed from 0.25 to 10, with 5 as the default; 0.5 is exactly half the level-1 speed and 0.25 is exactly one quarter;
 - choose whether `Space` scrolls the transcript or starts typing;
@@ -108,6 +115,7 @@ Settings are stored in `CodexKeyboardScroll.settings.ini` next to the executable
 FocusShortcut=AltF
 ScrollSpeed=5
 SpaceScroll=True
+ClaudeEnabled=False
 Language=system
 AutomaticUpdateChecks=False
 LastUpdateCheckUtc=
@@ -122,9 +130,16 @@ The optional startup setting is stored in the current user's standard Windows `R
 
 ## Focus and scrolling behavior
 
-The utility refreshes the Codex accessibility tree on a background worker and caches the preferred input. Visible answer and response fields take priority over the ordinary composer. The focus shortcut requests a fresh lookup so a newly opened or closed question is detected. Input focus is verified after every UI Automation focus request. If an exposed input cannot be focused through accessibility, its own bounds are used for the click fallback. A bottom-of-window fallback remains available when no input can be located.
+The utility refreshes the active supported app's accessibility tree on a background worker and caches the preferred input. In Codex, visible answer and response fields take priority over the ordinary composer. The focus shortcut requests a fresh lookup so a newly opened or closed question is detected. Input focus is verified after every UI Automation focus request. If an exposed input cannot be focused through accessibility, its own bounds are used for the click fallback. In Codex, a bottom-of-window fallback remains available when no input can be located.
 
-Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the Codex child window at the transcript coordinates, so the system pointer never moves or flickers.
+Claude support requires a recognized, named composer exposed through Windows UI
+Automation, including `Напишите запрос для Claude` and `Reply to Claude`. Search
+and unrelated settings fields are excluded. Claude's ordinary `Reply to Claude`
+field does not receive Codex's pending-question behavior. If no recognized composer
+is available, the utility does not guess its position or enter reading mode in
+Claude.
+
+Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the supported app's child window at the transcript coordinates, so the system pointer never moves or flickers.
 
 Manual click classification excludes the question card as well as the composer. Focusing an editable field with the mouse or Tab exits reading mode, preserving normal text editing with arrows and Space. If an unusual window layout is not classified correctly, use the focus shortcut.
 
@@ -134,12 +149,12 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 
 ## Privacy and security
 
-- The utility does not modify Codex application files or Windows system settings.
+- The utility does not modify Codex or Claude application files or Windows system settings.
 - It adds a current-user startup entry only when the user explicitly enables `Start with Windows`.
 - It does not require administrator privileges.
 - It contacts `api.github.com` after a manual request or, when explicitly enabled, at most once every 24 hours for an automatic update check.
 - It installs a low-level keyboard hook to detect the first typing key in reading mode. Key events are not logged, stored, or transmitted.
-- Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process.
+- Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process, or `Claude.exe` when `Claude` is enabled.
 - The source code is included so the executable can be reviewed and rebuilt locally.
 
 ## Build from source
@@ -184,7 +199,7 @@ If `Start with Windows` is enabled, turn it off first so the utility removes its
 
 This is an independent community utility. Future Codex updates may allow individual compatibility paths to be simplified or removed, while the broader keyboard focus and navigation features can continue to evolve.
 
-This project is not affiliated with or endorsed by OpenAI.
+This project is not affiliated with or endorsed by OpenAI or Anthropic.
 
 ## License
 

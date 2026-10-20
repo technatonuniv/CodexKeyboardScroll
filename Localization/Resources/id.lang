@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Layanan
 MenuUtilityEnabled=Utilitas aktif
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Pintasan fokus
 MenuScrollSpeed=Kecepatan gulir: {0}/10
 MenuSpaceScroll=Spasi menggulir halaman

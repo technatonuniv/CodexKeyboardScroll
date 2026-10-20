@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=サービス
 MenuUtilityEnabled=ユーティリティを有効にする
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=フォーカス切り替えキー
 MenuScrollSpeed=スクロール速度: {0}/10
 MenuSpaceScroll=スペースキーでページをスクロール

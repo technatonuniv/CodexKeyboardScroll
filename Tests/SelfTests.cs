@@ -19,9 +19,12 @@ namespace CodexKeyboardScroll
             int failures = 0;
             TestWindowLayout(ref failures);
             TestReplySelection(ref failures);
+            TestClaudeComposerSelection(ref failures);
+            TestApplicationPolicy(ref failures);
             TestFocusToggle(ref failures);
             TestTypingKeys(ref failures);
             TestSpaceScrolling(ref failures);
+            TestNavigationReplay(ref failures);
             TestKeyboardHookFiltering(ref failures);
             TestModifierStateClassification(ref failures);
             TestShortcutLabels(ref failures);
@@ -34,6 +37,7 @@ namespace CodexKeyboardScroll
             TestUpdateSchedule(ref failures);
             TestDropDownPlacement(ref failures);
             TestTrayMenuEvents(ref failures);
+            TestClaudeTrayMenu(ref failures);
             TestStartupRegistration(ref failures);
             TestIconResources(ref failures);
             TestWheelMessagePacking(ref failures);
@@ -132,6 +136,103 @@ namespace CodexKeyboardScroll
             Check(ref failures, !ScrollApplicationContext.ShouldFocusInput(false, true, true));
         }
 
+        private static void TestClaudeComposerSelection(ref int failures)
+        {
+            var window = new System.Windows.Rect(0, 0, 1920, 1042);
+            var main = new System.Windows.Rect(504, 918, 891, 55);
+            var welcome = new System.Windows.Rect(504, 400, 891, 55);
+            double russianScore;
+            double englishScore;
+            double ignored;
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, "Напишите запрос для Claude", true, true, false,
+                ChatApplication.Claude, out russianScore));
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, "Reply to Claude", true, true, false,
+                ChatApplication.Claude, out englishScore));
+            // "Reply" names Claude's ordinary composer and must not receive
+            // Codex's pending-question priority.
+            Check(ref failures, englishScore == russianScore);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                welcome, window, "Reply to Claude", true, true, false,
+                ChatApplication.Claude, out ignored));
+
+            foreach (string name in new[]
+            {
+                string.Empty, "Search", "Search Claude", "Settings",
+                "Claude", "Answer", "Your response", "Ask Codex", "Message"
+            })
+            {
+                Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                    main, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
+            }
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                main, window, "Reply to Claude", false, true, false,
+                ChatApplication.Claude, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                main, window, "Reply to Claude", true, false, false,
+                ChatApplication.Claude, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                main, window, "Reply to Claude", true, true, true,
+                ChatApplication.Claude, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                new System.Windows.Rect(504, 1100, 891, 55), window,
+                "Reply to Claude", true, true, false, ChatApplication.Claude, out ignored));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                main, window, "Reply to Claude", true, true, false,
+                ChatApplication.None, out ignored));
+
+            var offsetWindow = new System.Windows.Rect(-1920, 0, 1920, 1042);
+            var offsetMain = new System.Windows.Rect(-1416, 918, 891, 55);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                offsetMain, offsetWindow, "Reply to Claude", true, true, false,
+                ChatApplication.Claude, out englishScore));
+            Check(ref failures, englishScore == russianScore);
+
+            double legacyScore;
+            double codexScore;
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, string.Empty, true, true, false, out legacyScore));
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                main, window, string.Empty, true, true, false,
+                ChatApplication.Codex, out codexScore));
+            Check(ref failures, legacyScore == codexScore);
+            Check(ref failures, ComposerLocator.TryScoreCandidate(
+                welcome, window, "Your response", true, true, false,
+                ChatApplication.Codex, out codexScore));
+            Check(ref failures, codexScore > russianScore);
+        }
+
+        private static void TestApplicationPolicy(ref int failures)
+        {
+            foreach (string name in new[] { "ChatGPT", "CHATGPT", "Codex", "codex" })
+            {
+                ChatApplication application = NativeInput.ClassifyProcessName(name);
+                Check(ref failures, application == ChatApplication.Codex);
+                Check(ref failures, NativeInput.IsApplicationEnabled(application, false));
+                Check(ref failures, NativeInput.IsApplicationEnabled(application, true));
+            }
+            foreach (string name in new[] { "Claude", "CLAUDE", "claude" })
+            {
+                ChatApplication application = NativeInput.ClassifyProcessName(name);
+                Check(ref failures, application == ChatApplication.Claude);
+                Check(ref failures, !NativeInput.IsApplicationEnabled(application, false));
+                Check(ref failures, NativeInput.IsApplicationEnabled(application, true));
+            }
+            foreach (string name in new[]
+            {
+                null, string.Empty, "chrome", "msedge", "ClaudeCode", "Claude Helper",
+                "MyClaude", "Claude.exe", "Claude ", "ChatGPTHelper", "CodexCLI"
+            })
+            {
+                ChatApplication application = NativeInput.ClassifyProcessName(name);
+                Check(ref failures, application == ChatApplication.None);
+                Check(ref failures, !NativeInput.IsApplicationEnabled(application, false));
+                Check(ref failures, !NativeInput.IsApplicationEnabled(application, true));
+            }
+        }
+
         private static void TestTypingKeys(ref int failures)
         {
             Check(ref failures, PrintableKeyClassifier.IsTypingKey(0x41, true));
@@ -165,6 +266,21 @@ namespace CodexKeyboardScroll
             Check(ref failures, KeyboardHook.ShouldProcess(IntPtr.Zero));
             Check(ref failures, KeyboardHook.ShouldProcess(new IntPtr(1)));
             Check(ref failures, !KeyboardHook.ShouldProcess(NativeInput.SyntheticInputMarker));
+        }
+
+        private static void TestNavigationReplay(ref int failures)
+        {
+            // Leaving reading mode must pass through the intercepted key:
+            // Space is not interchangeable with a Page Down key in another app.
+            KeyboardStroke space = NativeInput.NavigationStroke(0x20);
+            Check(ref failures, space.VirtualKey == 0x20);
+            Check(ref failures, (space.Flags & 0x01) == 0);
+            foreach (uint key in new uint[] { 0x26, 0x28, 0x21, 0x22 })
+            {
+                KeyboardStroke navigation = NativeInput.NavigationStroke(key);
+                Check(ref failures, navigation.VirtualKey == key);
+                Check(ref failures, (navigation.Flags & 0x01) != 0);
+            }
         }
 
         private static void TestModifierStateClassification(ref int failures)
@@ -228,6 +344,8 @@ namespace CodexKeyboardScroll
             Check(ref failures, defaults.ScrollSpeedLevel == ScrollProfile.DefaultLevel);
             Check(ref failures, defaults.LanguageCode == LocalizationManager.SystemLanguageCode);
             Check(ref failures, defaults.SpaceScroll);
+            Check(ref failures, !defaults.ClaudeEnabled);
+            Check(ref failures, defaults.Serialize().Contains("ClaudeEnabled=False"));
             Check(ref failures, !defaults.AutomaticUpdateChecks);
             Check(ref failures, !defaults.LastUpdateCheckUtc.HasValue);
             Check(ref failures, defaults.LatestKnownVersion.Length == 0);
@@ -253,6 +371,25 @@ namespace CodexKeyboardScroll
             Check(ref failures, serialized.Contains(
                 "LastUpdateCheckUtc=2026-08-21T10:15:30.0000000Z"));
             Check(ref failures, serialized.Contains("LatestKnownVersion=2.1.0"));
+
+            UtilitySettings.Apply(persisted, "ClaudeEnabled", "invalid");
+            Check(ref failures, !persisted.ClaudeEnabled);
+            UtilitySettings.Apply(persisted, "claudeenabled", "tRuE");
+            Check(ref failures, persisted.ClaudeEnabled);
+            UtilitySettings.Apply(persisted, "ClaudeEnabled", "invalid");
+            Check(ref failures, persisted.ClaudeEnabled);
+            serialized = persisted.Serialize();
+            Check(ref failures, serialized.Contains("ClaudeEnabled=True"));
+            var restored = new UtilitySettings();
+            foreach (string line in serialized)
+            {
+                string[] parts = line.Split(new[] { '=' }, 2);
+                UtilitySettings.Apply(restored, parts[0], parts[1]);
+            }
+            Check(ref failures, restored.ClaudeEnabled);
+            UtilitySettings.Apply(restored, "ClaudeEnabled", "False");
+            Check(ref failures, !restored.ClaudeEnabled);
+            Check(ref failures, restored.Serialize().Contains("ClaudeEnabled=False"));
         }
 
         private static void TestUpdateVersionParsing(ref int failures)
@@ -471,6 +608,44 @@ namespace CodexKeyboardScroll
             Check(ref failures, localizer.EffectiveLanguageCode == "en");
             localizer.SetLanguage(LocalizationManager.SystemLanguageCode);
             Check(ref failures, localizer.RequestedLanguageCode == LocalizationManager.SystemLanguageCode);
+        }
+
+        private static void TestClaudeTrayMenu(ref int failures)
+        {
+            var settings = new UtilitySettings();
+            var localizer = new LocalizationManager("en");
+            using (var view = new TrayMenuView(localizer, settings, false))
+            {
+                int changeCount = 0;
+                bool claudeEnabled = false;
+                view.ClaudeEnabledChanged += delegate(bool enabled)
+                {
+                    changeCount++;
+                    claudeEnabled = enabled;
+                };
+                var item = (ToolStripMenuItem)view.Menu.Items["claudeEnabledItem"];
+                Check(ref failures, !item.Checked);
+                Check(ref failures, item.Text == "Claude");
+                item.PerformClick();
+                Check(ref failures, item.Checked && claudeEnabled && changeCount == 1);
+                item.PerformClick();
+                Check(ref failures, !item.Checked && !claudeEnabled && changeCount == 2);
+
+                foreach (LanguageDefinition language in localizer.Languages)
+                {
+                    localizer.SetLanguage(language.Code);
+                    view.ApplyLocalization(settings);
+                    Check(ref failures, item.Text == "Claude");
+                }
+                Check(ref failures, changeCount == 2);
+            }
+
+            settings.ClaudeEnabled = true;
+            using (var view = new TrayMenuView(localizer, settings, false))
+            {
+                var item = (ToolStripMenuItem)view.Menu.Items["claudeEnabledItem"];
+                Check(ref failures, item.Checked);
+            }
         }
 
         private static void TestStartupRegistration(ref int failures)

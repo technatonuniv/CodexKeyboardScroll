@@ -4,6 +4,13 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-20
+
+### Added
+
+- Added optional support for the Claude desktop app on Windows, controlled by the `Claude` tray-menu switch and disabled by default.
+- Persisted the Claude setting and limited Claude input discovery to recognized composers, without guessing an input position when accessibility discovery fails.
+
 ## [2.0.5] - 2026-10-10
 
 ### Fixed

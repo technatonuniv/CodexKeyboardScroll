@@ -1,5 +1,12 @@
 namespace CodexKeyboardScroll
 {
+    internal enum ChatApplication
+    {
+        None,
+        Codex,
+        Claude
+    }
+
     internal enum ScrollCommand
     {
         LineUp,

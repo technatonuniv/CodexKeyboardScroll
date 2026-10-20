@@ -33,6 +33,10 @@ namespace CodexKeyboardScroll
         private int hotkeyFailureCount;
         private bool disposed;
         private bool updateCheckInProgress;
+        private IntPtr observedWindow;
+        private IntPtr readingWindow;
+        private IntPtr focusToggleWindow;
+        private IntPtr pendingClickWindow;
 
         internal ScrollApplicationContext()
         {
@@ -96,6 +100,7 @@ namespace CodexKeyboardScroll
         private void WireMenuEvents()
         {
             menuView.EnabledChanged += ToggleEnabled;
+            menuView.ClaudeEnabledChanged += ToggleClaude;
             menuView.ShortcutChanged += ChangeShortcut;
             menuView.SpeedChanged += ChangeSpeed;
             menuView.SpaceScrollChanged += ToggleSpaceBehavior;
@@ -111,12 +116,14 @@ namespace CodexKeyboardScroll
 
         private void Poll(object sender, EventArgs e)
         {
-            bool chatForeground = NativeInput.IsChatForeground();
-            UpdateFocusHotkey(toolEnabled && chatForeground);
+            IntPtr window = NativeInput.GetForegroundWindow();
+            ObserveWindow(window);
+            bool chatForeground = IsEnabledWindow(window);
             if (chatForeground)
             {
-                composerLocator.RequestRefresh(NativeInput.GetForegroundWindow());
+                composerLocator.RequestRefresh(window);
             }
+            UpdateFocusHotkey(toolEnabled && chatForeground && CanControlWindow(window));
 
             bool leftDown = (NativeInput.GetAsyncKeyState(NativeInput.VkLeftButton) & 0x8000) != 0;
             if (leftDown && !previousLeftButtonDown)
@@ -126,6 +133,7 @@ namespace CodexKeyboardScroll
                 {
                     pendingClick = new Point(point.X, point.Y);
                     pendingClickTick = Environment.TickCount;
+                    pendingClickWindow = window;
                     hasPendingClick = true;
                 }
             }
@@ -134,7 +142,8 @@ namespace CodexKeyboardScroll
             if (hasPendingClick && unchecked(Environment.TickCount - pendingClickTick) >= 50)
             {
                 hasPendingClick = false;
-                SetReadingMode(toolEnabled && chatForeground && ClickWasInTranscript(pendingClick));
+                SetReadingMode(toolEnabled && chatForeground && pendingClickWindow == window
+                    && CanControlWindow(window) && ClickWasInTranscript(pendingClick));
             }
 
             if (readingMode && (!chatForeground
@@ -142,6 +151,36 @@ namespace CodexKeyboardScroll
             {
                 SetReadingMode(false);
             }
+        }
+
+        private bool IsEnabledWindow(IntPtr window)
+        {
+            return window != IntPtr.Zero && window == NativeInput.GetForegroundWindow()
+                && NativeInput.IsApplicationEnabled(
+                    NativeInput.GetChatApplication(window), settings.ClaudeEnabled);
+        }
+
+        private bool CanControlWindow(IntPtr window)
+        {
+            NativeInput.Rect bounds;
+            return NativeInput.GetChatApplication(window) != ChatApplication.Claude
+                || composerLocator.TryGetBounds(window, out bounds);
+        }
+
+        private void ObserveWindow(IntPtr window)
+        {
+            if (observedWindow == window) return;
+            observedWindow = window;
+            CancelPendingInput();
+            SetReadingMode(false);
+        }
+
+        private void CancelPendingInput()
+        {
+            focusToggleTimer.Stop();
+            focusToggleWindow = IntPtr.Zero;
+            hasPendingClick = false;
+            pendingClickWindow = IntPtr.Zero;
         }
 
         private bool ClickWasInTranscript(Point click)
@@ -156,7 +195,8 @@ namespace CodexKeyboardScroll
             NativeInput.Rect composerBounds;
             return composerLocator.TryGetBounds(window, out composerBounds)
                 ? WindowLayout.IsTranscriptClick(rect, click, composerBounds,
-                    composerLocator.HasReplyInput(window))
+                    composerLocator.HasReplyInput(window)
+                        || NativeInput.GetChatApplication(window) == ChatApplication.Claude)
                 : WindowLayout.IsTranscriptClick(rect, click);
         }
 
@@ -233,41 +273,50 @@ namespace CodexKeyboardScroll
             }
 
             readingMode = enabled;
+            readingWindow = enabled ? NativeInput.GetForegroundWindow() : IntPtr.Zero;
             UpdateUi();
         }
 
-        private void HandleScrollHotkey(ScrollCommand command)
+        private void HandleScrollHotkey(ScrollCommand command, uint virtualKey)
         {
-            if (!toolEnabled || !readingMode || !NativeInput.IsChatForeground())
+            IntPtr window = NativeInput.GetForegroundWindow();
+            if (!toolEnabled || !readingMode || readingWindow != window
+                || !IsEnabledWindow(window) || !CanControlWindow(window))
             {
                 SetReadingMode(false);
+                NativeInput.ReplayKeyboard(NativeInput.NavigationStroke(virtualKey));
                 return;
             }
 
             if (composerLocator.HasFocusedInput(NativeInput.GetForegroundWindow()))
             {
                 SetReadingMode(false);
-                NativeInput.ReplayNavigationKey(command);
+                NativeInput.ReplayKeyboard(NativeInput.NavigationStroke(virtualKey));
                 return;
             }
 
-            NativeInput.ScrollForeground(
+            NativeInput.ScrollWindow(window,
                 ScrollProfile.WheelDelta(command, settings.ScrollSpeedLevel));
         }
 
         private void QueueFocusToggle()
         {
-            if (toolEnabled && NativeInput.IsChatForeground())
+            IntPtr window = NativeInput.GetForegroundWindow();
+            ObserveWindow(window);
+            if (toolEnabled && IsEnabledWindow(window) && CanControlWindow(window))
             {
                 focusToggleTick = Environment.TickCount;
-                composerLocator.RequestRefresh(NativeInput.GetForegroundWindow(), true);
+                focusToggleWindow = window;
+                composerLocator.RequestRefresh(window, true);
                 focusToggleTimer.Start();
             }
         }
 
         private void CompleteFocusToggle(object sender, EventArgs e)
         {
-            if (!toolEnabled || !NativeInput.IsChatForeground())
+            IntPtr window = NativeInput.GetForegroundWindow();
+            if (!toolEnabled || focusToggleWindow != window || !IsEnabledWindow(window)
+                || !CanControlWindow(window))
             {
                 focusToggleTimer.Stop();
                 return;
@@ -283,24 +332,23 @@ namespace CodexKeyboardScroll
             }
 
             focusToggleTimer.Stop();
-            IntPtr window = NativeInput.GetForegroundWindow();
+            focusToggleWindow = IntPtr.Zero;
             bool hasReply = composerLocator.HasReplyInput(window);
             // Alt release can leave Chromium in menu mnemonic mode even though the
             // modifier is no longer down. Escape dismisses that mode before focusing.
             if (hotkeys.FocusToggleUsesAlt && !hasReply)
             {
-                NativeInput.DismissMenuMode();
+                NativeInput.DismissMenuMode(window);
             }
 
             if (!ShouldFocusInput(readingMode, hasReply, composerLocator.IsReplyFocused(window)))
             {
-                NativeInput.FocusTranscript();
-                SetReadingMode(true);
+                if (NativeInput.FocusTranscript(window)) SetReadingMode(true);
                 return;
             }
 
             SetReadingMode(false);
-            FocusComposer();
+            FocusComposer(window);
         }
 
         internal static bool ShouldFocusInput(bool reading, bool hasReply, bool replyFocused)
@@ -308,22 +356,26 @@ namespace CodexKeyboardScroll
             return reading || (hasReply && !replyFocused);
         }
 
-        private void FocusComposer()
+        private void FocusComposer(IntPtr window)
         {
-            if (!toolEnabled || !NativeInput.IsChatForeground())
+            if (!toolEnabled || !IsEnabledWindow(window))
             {
                 return;
             }
-            if (!composerLocator.TryFocus(NativeInput.GetForegroundWindow()))
+            if (!composerLocator.TryFocus(window)
+                && NativeInput.GetChatApplication(window) == ChatApplication.Codex)
             {
-                NativeInput.FocusComposer();
+                NativeInput.FocusComposer(window);
             }
         }
 
         private bool HandleKeyboardStroke(KeyboardStroke stroke)
         {
-            if (!toolEnabled || !readingMode || !NativeInput.IsChatForeground())
+            IntPtr window = NativeInput.GetForegroundWindow();
+            if (!toolEnabled || !readingMode || readingWindow != window
+                || !IsEnabledWindow(window) || !CanControlWindow(window))
             {
+                if (readingMode) SetReadingMode(false);
                 return false;
             }
 
@@ -345,13 +397,14 @@ namespace CodexKeyboardScroll
                 if (shiftDown && scrollCommand.Value == ScrollCommand.PageUp)
                 {
                     return NativeInput.ScrollForegroundWithoutShift(
+                        window,
                         ScrollProfile.WheelDelta(
                             scrollCommand.Value,
                             settings.ScrollSpeedLevel),
                         stroke.ShiftVirtualKey,
                         stroke.ShiftDown);
                 }
-                HandleScrollHotkey(scrollCommand.Value);
+                HandleScrollHotkey(scrollCommand.Value, stroke.VirtualKey);
                 return true;
             }
 
@@ -364,11 +417,12 @@ namespace CodexKeyboardScroll
             SetReadingMode(false);
             // The hook suppresses the physical key only when this method returns true.
             // Replay after focusing preserves the first character the user intended to type.
-            if (composerLocator.TryFocus(NativeInput.GetForegroundWindow()))
+            if (composerLocator.TryFocus(window))
             {
-                return NativeInput.ReplayKeyboard(stroke);
+                return IsEnabledWindow(window) && NativeInput.ReplayKeyboard(stroke);
             }
-            return NativeInput.FocusComposerAndReplay(stroke);
+            return NativeInput.GetChatApplication(window) == ChatApplication.Codex
+                && NativeInput.FocusComposerAndReplay(window, stroke);
         }
 
         private void ToggleEnabled(bool enabled)
@@ -376,10 +430,22 @@ namespace CodexKeyboardScroll
             toolEnabled = enabled;
             if (!toolEnabled)
             {
+                CancelPendingInput();
                 SetReadingMode(false);
                 hotkeys.DisableFocusToggle();
                 nextHotkeyRetryTick = 0;
             }
+            UpdateUi();
+        }
+
+        private void ToggleClaude(bool enabled)
+        {
+            settings.ClaudeEnabled = enabled;
+            CancelPendingInput();
+            SetReadingMode(false);
+            SaveSettings();
+            IntPtr window = NativeInput.GetForegroundWindow();
+            UpdateFocusHotkey(toolEnabled && IsEnabledWindow(window) && CanControlWindow(window));
             UpdateUi();
         }
 

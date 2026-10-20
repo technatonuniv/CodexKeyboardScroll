@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Service
 MenuUtilityEnabled=Utilitaire activé
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Raccourci de focus
 MenuScrollSpeed=Vitesse de défilement : {0}/10
 MenuSpaceScroll=La barre d'espace fait défiler la page

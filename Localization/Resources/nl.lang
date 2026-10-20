@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Service
 MenuUtilityEnabled=Hulpprogramma ingeschakeld
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Focussneltoets
 MenuScrollSpeed=Scrollsnelheid: {0}/10
 MenuSpaceScroll=Spatiebalk scrolt de pagina

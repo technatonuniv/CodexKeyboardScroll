@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=सेवा
 MenuUtilityEnabled=उपयोगिता चालू है
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=फ़ोकस शॉर्टकट
 MenuScrollSpeed=स्क्रॉल गति: {0}/10
 MenuSpaceScroll=स्पेस कुंजी पृष्ठ को स्क्रॉल करती है

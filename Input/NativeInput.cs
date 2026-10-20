@@ -39,8 +39,10 @@ namespace CodexKeyboardScroll
         private const int VirtualWidth = 78;
         private const int VirtualHeight = 79;
 
-        private static uint cachedProcessId;
-        private static bool cachedIsChat;
+        // Accessibility refreshes run on workers; never share a partially updated
+        // process identity with the UI thread or keyboard hook.
+        [ThreadStatic] private static uint cachedProcessId;
+        [ThreadStatic] private static ChatApplication cachedApplication;
 
         [DllImport("user32.dll")]
         internal static extern IntPtr GetForegroundWindow();
@@ -85,36 +87,54 @@ namespace CodexKeyboardScroll
         [DllImport("user32.dll")]
         private static extern IntPtr ChildWindowFromPointEx(IntPtr parent, PointNative point, uint flags);
 
-        internal static bool IsChatForeground()
+        internal static bool IsChatForeground(bool claudeEnabled = false)
         {
-            IntPtr window = GetForegroundWindow();
+            return IsApplicationEnabled(GetChatApplication(GetForegroundWindow()), claudeEnabled);
+        }
+
+        internal static ChatApplication ClassifyProcessName(string name)
+        {
+            if (string.Equals(name, "ChatGPT", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "Codex", StringComparison.OrdinalIgnoreCase))
+                return ChatApplication.Codex;
+            return string.Equals(name, "Claude", StringComparison.OrdinalIgnoreCase)
+                ? ChatApplication.Claude : ChatApplication.None;
+        }
+
+        internal static bool IsApplicationEnabled(ChatApplication application, bool claudeEnabled)
+        {
+            return application == ChatApplication.Codex
+                || (application == ChatApplication.Claude && claudeEnabled);
+        }
+
+        internal static ChatApplication GetChatApplication(IntPtr window)
+        {
             uint processId;
             if (window == IntPtr.Zero
                 || GetWindowThreadProcessId(window, out processId) == 0
                 || processId == 0)
             {
-                return false;
+                return ChatApplication.None;
             }
 
             if (processId == cachedProcessId)
             {
-                return cachedIsChat;
+                return cachedApplication;
             }
 
             cachedProcessId = processId;
-            cachedIsChat = false;
+            cachedApplication = ChatApplication.None;
             try
             {
                 using (Process process = Process.GetProcessById((int)processId))
                 {
-                    cachedIsChat = process.ProcessName.Equals("ChatGPT", StringComparison.OrdinalIgnoreCase)
-                        || process.ProcessName.Equals("Codex", StringComparison.OrdinalIgnoreCase);
+                    cachedApplication = ClassifyProcessName(process.ProcessName);
                 }
             }
             catch
             {
             }
-            return cachedIsChat;
+            return cachedApplication;
         }
 
         internal static bool IsCommandModifierDown()
@@ -153,10 +173,12 @@ namespace CodexKeyboardScroll
         }
 
         internal static bool ScrollForegroundWithoutShift(
+            IntPtr window,
             int wheelDelta,
             uint shiftVirtualKey,
             bool restoreShift)
         {
+            if (window == IntPtr.Zero || window != GetForegroundWindow()) return false;
             uint key = shiftVirtualKey == 0 ? 0x10 : shiftVirtualKey;
             var shift = new KeyboardStroke(key, 0, 0, false, 0);
             Input shiftUp = KeyboardInput(shift, true);
@@ -183,7 +205,8 @@ namespace CodexKeyboardScroll
         internal static bool ScrollWindow(IntPtr window, int wheelDelta)
         {
             Rect rect;
-            if (window == IntPtr.Zero || !GetWindowRect(window, out rect))
+            if (window == IntPtr.Zero || window != GetForegroundWindow()
+                || !GetWindowRect(window, out rect))
             {
                 return false;
             }
@@ -217,14 +240,29 @@ namespace CodexKeyboardScroll
             return FocusTarget(false, null);
         }
 
+        internal static bool FocusTranscript(IntPtr window)
+        {
+            return FocusTarget(window, false, null);
+        }
+
         internal static bool FocusComposer()
         {
             return FocusTarget(true, null);
         }
 
+        internal static bool FocusComposer(IntPtr window)
+        {
+            return FocusTarget(window, true, null);
+        }
+
         internal static bool FocusComposerAndReplay(KeyboardStroke stroke)
         {
             return FocusTarget(true, stroke);
+        }
+
+        internal static bool FocusComposerAndReplay(IntPtr window, KeyboardStroke stroke)
+        {
+            return FocusTarget(window, true, stroke);
         }
 
         internal static bool FocusInput(IntPtr window, Rect bounds)
@@ -250,6 +288,11 @@ namespace CodexKeyboardScroll
             return ReplayKeyboard(new KeyboardStroke(key, 0, 0x01, false, 0));
         }
 
+        internal static KeyboardStroke NavigationStroke(uint virtualKey)
+        {
+            return new KeyboardStroke(virtualKey, 0, virtualKey == 0x20 ? 0u : 0x01u, false, 0);
+        }
+
         internal static bool ReplayKeyboard(KeyboardStroke stroke)
         {
             Input[] inputs = { KeyboardInput(stroke, false), KeyboardInput(stroke, true) };
@@ -262,8 +305,9 @@ namespace CodexKeyboardScroll
                 && !IsKeyDown(0x12) && !IsKeyDown(0x46);
         }
 
-        internal static bool DismissMenuMode()
+        internal static bool DismissMenuMode(IntPtr window)
         {
+            if (window == IntPtr.Zero || window != GetForegroundWindow()) return false;
             var escape = new KeyboardStroke(0x1B, 0, 0, false, 0);
             Input[] inputs = { KeyboardInput(escape, false), KeyboardInput(escape, true) };
             return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == (uint)inputs.Length;
@@ -308,9 +352,14 @@ namespace CodexKeyboardScroll
 
         private static bool FocusTarget(bool composer, KeyboardStroke? replay)
         {
-            IntPtr window = GetForegroundWindow();
+            return FocusTarget(GetForegroundWindow(), composer, replay);
+        }
+
+        private static bool FocusTarget(IntPtr window, bool composer, KeyboardStroke? replay)
+        {
             Rect rect;
-            if (window == IntPtr.Zero || !GetWindowRect(window, out rect))
+            if (window == IntPtr.Zero || window != GetForegroundWindow()
+                || !GetWindowRect(window, out rect))
             {
                 return false;
             }

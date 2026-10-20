@@ -4,9 +4,9 @@ using System.Runtime.Versioning;
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 [assembly: AssemblyTitle("Codex Keyboard Scroll")]
-[assembly: AssemblyDescription("Windows keyboard navigation and focus utility for the Codex desktop app.")]
+[assembly: AssemblyDescription("Windows keyboard navigation and focus utility for Codex and optional Claude desktop support.")]
 [assembly: AssemblyCompany("technatonuniv")]
 [assembly: AssemblyProduct("Codex Keyboard Scroll")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 technatonuniv")]
-[assembly: AssemblyVersion("2.0.5.0")]
-[assembly: AssemblyFileVersion("2.0.5.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyFileVersion("2.1.0.0")]

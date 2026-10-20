@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Service
 MenuUtilityEnabled=Hilfsprogramm aktiviert
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Fokus-Tastenkürzel
 MenuScrollSpeed=Scrollgeschwindigkeit: {0}/10
 MenuSpaceScroll=Leertaste scrollt die Seite

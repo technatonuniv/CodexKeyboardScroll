@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=Сервіс
 MenuUtilityEnabled=Утиліту ввімкнено
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=Комбінація для зміни фокуса
 MenuScrollSpeed=Швидкість прокручування: {0}/10
 MenuSpaceScroll=Пробіл прокручує сторінку

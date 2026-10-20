@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=服務
 MenuUtilityEnabled=啟用工具
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=焦點切換快速鍵
 MenuScrollSpeed=捲動速度：{0}/10
 MenuSpaceScroll=空白鍵捲動頁面

@@ -3,6 +3,7 @@ AppName=Codex Keyboard Scroll
 SummaryFormat={0} · {1} · {2}
 MenuService=서비스
 MenuUtilityEnabled=유틸리티 사용
+MenuClaudeEnabled=Claude
 MenuFocusShortcut=포커스 단축키
 MenuScrollSpeed=스크롤 속도: {0}/10
 MenuSpaceScroll=스페이스바로 페이지 스크롤

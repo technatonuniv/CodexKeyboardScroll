@@ -72,21 +72,37 @@ namespace CodexKeyboardScroll
             {
                 processId = cachedWindow == window ? cachedProcessId : 0;
             }
-            if (processId == 0) return false;
+            if (processId == 0 || window == IntPtr.Zero
+                || window != NativeInput.GetForegroundWindow()) return false;
 
             try
             {
                 AutomationElement focused = AutomationElement.FocusedElement;
                 return focused != null
-                    && focused.Current.ProcessId == processId
                     && focused.Current.ControlType == ControlType.Edit
-                    && focused.Current.IsEnabled;
+                    && focused.Current.IsEnabled
+                    && BelongsToWindow(focused, window);
             }
             catch (Exception error)
             {
                 if (!IsExpectedAccessibilityFailure(error)) throw;
                 return false;
             }
+        }
+
+        private static bool BelongsToWindow(AutomationElement element, IntPtr window)
+        {
+            // Chromium can expose the composer and other edits from different
+            // renderer processes. Their containing HWND, not PID, defines scope.
+            for (int depth = 0; element != null && depth < 48; depth++)
+            {
+                if (new IntPtr(element.Current.NativeWindowHandle) == window)
+                {
+                    return true;
+                }
+                element = TreeWalker.RawViewWalker.GetParent(element);
+            }
+            return false;
         }
 
         internal void RequestRefresh(IntPtr window, bool force = false)
@@ -142,6 +158,11 @@ namespace CodexKeyboardScroll
 
         internal bool TryFocus(IntPtr window)
         {
+            if (window == IntPtr.Zero || window != NativeInput.GetForegroundWindow())
+            {
+                return false;
+            }
+
             AutomationElement element;
             lock (sync)
             {
@@ -161,9 +182,15 @@ namespace CodexKeyboardScroll
                     RequestRefresh(window, true);
                     return false;
                 }
+                if (!BelongsToWindow(element, window)
+                    || window != NativeInput.GetForegroundWindow())
+                {
+                    return false;
+                }
                 element.SetFocus();
                 Thread.Sleep(10);
-                if (element.Current.HasKeyboardFocus)
+                if (window == NativeInput.GetForegroundWindow()
+                    && element.Current.HasKeyboardFocus)
                 {
                     return true;
                 }
@@ -194,16 +221,18 @@ namespace CodexKeyboardScroll
         internal bool TryGetBounds(IntPtr window, out NativeInput.Rect bounds)
         {
             AutomationElement element;
+            AutomationElement edit;
             bool isContainer;
             lock (sync)
             {
+                edit = cachedWindow == window ? composer : null;
                 isContainer = cachedWindow == window && composerContainer != null;
                 element = isContainer
                     ? composerContainer
-                    : cachedWindow == window ? composer : null;
+                    : edit;
             }
 
-            if (element == null)
+            if (element == null || edit == null)
             {
                 bounds = new NativeInput.Rect();
                 RequestRefresh(window);
@@ -212,6 +241,13 @@ namespace CodexKeyboardScroll
 
             try
             {
+                if (edit.Current.IsOffscreen || !edit.Current.IsEnabled
+                    || element.Current.IsOffscreen || !element.Current.IsEnabled)
+                {
+                    bounds = new NativeInput.Rect();
+                    RequestRefresh(window, true);
+                    return false;
+                }
                 System.Windows.Rect rect = element.Current.BoundingRectangle;
                 if (!isContainer && !rect.IsEmpty)
                 {
@@ -252,7 +288,9 @@ namespace CodexKeyboardScroll
                 {
                     processId = root.Current.ProcessId;
                     AutomationElement conversationComposer;
-                    found = FindBestComposer(root, out conversationComposer, out isReply);
+                    found = FindBestComposer(root, NativeInput.GetChatApplication(window),
+                        out conversationComposer, out isReply);
+                    if (found != null) processId = found.Current.ProcessId;
                     container = FindComposerContainer(found, conversationComposer, isReply);
                 }
             }
@@ -378,6 +416,7 @@ namespace CodexKeyboardScroll
 
         private static AutomationElement FindBestComposer(
             AutomationElement root,
+            ChatApplication application,
             out AutomationElement conversationComposer,
             out bool isReply)
         {
@@ -400,12 +439,12 @@ namespace CodexKeyboardScroll
                     string name = element.Current.Name;
                     if (!TryScoreCandidate(rect, rootRect, name,
                         element.Current.IsEnabled, element.Current.IsKeyboardFocusable,
-                        element.Current.IsOffscreen, out score))
+                        element.Current.IsOffscreen, application, out score))
                     {
                         continue;
                     }
 
-                    bool reply = HasReplyHint(name);
+                    bool reply = application == ChatApplication.Codex && HasReplyHint(name);
                     if (!reply && score > mainScore)
                     {
                         conversationComposer = element;
@@ -434,10 +473,33 @@ namespace CodexKeyboardScroll
             bool offscreen,
             out double score)
         {
-            bool reply = HasReplyHint(name);
+            return TryScoreCandidate(rect, rootRect, name, enabled, focusable,
+                offscreen, ChatApplication.Codex, out score);
+        }
+
+        internal static bool TryScoreCandidate(
+            System.Windows.Rect rect,
+            System.Windows.Rect rootRect,
+            string name,
+            bool enabled,
+            bool focusable,
+            bool offscreen,
+            ChatApplication application,
+            out double score)
+        {
+            bool claude = application == ChatApplication.Claude;
+            bool reply = application == ChatApplication.Codex && HasReplyHint(name);
             score = double.MinValue;
-            if (rect.IsEmpty || rootRect.IsEmpty || rect.Width < 140 || rect.Height < 18
-                || rect.Top < rootRect.Top + (reply ? 55 : rootRect.Height * 0.50)
+            if (application == ChatApplication.None
+                || (claude && !HasClaudeComposerHint(name))
+                || rect.IsEmpty || rootRect.IsEmpty
+                || !IsScreenCoordinate(rect.Left) || !IsScreenCoordinate(rect.Top)
+                || !IsScreenCoordinate(rect.Right) || !IsScreenCoordinate(rect.Bottom)
+                || !IsScreenCoordinate(rootRect.Left) || !IsScreenCoordinate(rootRect.Top)
+                || !IsScreenCoordinate(rootRect.Right) || !IsScreenCoordinate(rootRect.Bottom)
+                || rect.Width < 140 || rect.Height < 18
+                || rect.Top < rootRect.Top + (reply ? 55
+                    : claude ? Math.Max(55, rootRect.Height * 0.20) : rootRect.Height * 0.50)
                 || rect.Bottom > rootRect.Bottom + 2 || rect.Left < rootRect.Left
                 || rect.Right > rootRect.Right + 2 || !enabled || !focusable || offscreen)
             {
@@ -445,9 +507,25 @@ namespace CodexKeyboardScroll
             }
 
             score = rect.Top - rootRect.Top + Math.Min(rect.Width, 10000);
-            if (HasComposerHint(name)) score += 20000;
+            if (claude || HasComposerHint(name)) score += 20000;
             if (reply) score += 100000;
             return true;
+        }
+
+        private static bool HasClaudeComposerHint(string value)
+        {
+            string name = (value ?? string.Empty).Trim()
+                .TrimEnd('.', ':', '\u2026').TrimEnd().ToLowerInvariant();
+            // Restrict Claude to recognizable composer labels. A generic edit or a
+            // search/task/editor label must never become a typing-replay destination.
+            return name == "reply to claude"
+                || name == "message claude"
+                || name == "message to claude"
+                || name == "ask claude"
+                || name == "prompt claude"
+                || name == "write a message to claude"
+                || name == "\u043d\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u0437\u0430\u043f\u0440\u043e\u0441 \u0434\u043b\u044f claude"
+                || name == "\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0434\u043b\u044f claude";
         }
 
         private static bool HasReplyHint(string value)
