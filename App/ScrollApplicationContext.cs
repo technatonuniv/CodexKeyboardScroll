@@ -344,9 +344,10 @@ namespace CodexKeyboardScroll
             focusToggleTimer.Stop();
             focusToggleWindow = IntPtr.Zero;
             bool hasReply = composerLocator.HasReplyInput(window);
-            // Alt release can leave Chromium in menu mnemonic mode even though the
-            // modifier is no longer down. Escape dismisses that mode before focusing.
-            if (hotkeys.FocusToggleUsesAlt && !hasReply)
+            // Codex may retain menu mnemonic mode after Alt release. Claude's
+            // Escape can interrupt a running Code task, so never send it there.
+            if (ShouldDismissMenuMode(
+                NativeInput.GetChatApplication(window), hotkeys.FocusToggleUsesAlt, hasReply))
             {
                 NativeInput.DismissMenuMode(window);
             }
@@ -402,6 +403,12 @@ namespace CodexKeyboardScroll
         internal static bool ShouldFocusInput(bool reading, bool hasReply, bool replyFocused)
         {
             return reading || (hasReply && !replyFocused);
+        }
+
+        internal static bool ShouldDismissMenuMode(
+            ChatApplication application, bool usesAlt, bool hasReply)
+        {
+            return application == ChatApplication.Codex && usesAlt && !hasReply;
         }
 
         private void FocusComposer(IntPtr window)

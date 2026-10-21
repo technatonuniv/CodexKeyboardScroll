@@ -20,8 +20,10 @@ namespace CodexKeyboardScroll
             TestWindowLayout(ref failures);
             TestReplySelection(ref failures);
             TestClaudeComposerSelection(ref failures);
+            TestClaudeCodeComposerSelection(ref failures);
             TestApplicationPolicy(ref failures);
             TestFocusToggle(ref failures);
+            TestMenuDismissalPolicy(ref failures);
             TestTranscriptFocusSettlement(ref failures);
             TestTypingKeys(ref failures);
             TestSpaceScrolling(ref failures);
@@ -197,6 +199,28 @@ namespace CodexKeyboardScroll
             }));
         }
 
+        private static void TestMenuDismissalPolicy(ref int failures)
+        {
+            foreach (bool usesAlt in new[] { false, true })
+            {
+                foreach (bool hasReply in new[] { false, true })
+                {
+                    Check(ref failures, !ScrollApplicationContext.ShouldDismissMenuMode(
+                        ChatApplication.Claude, usesAlt, hasReply));
+                    Check(ref failures, !ScrollApplicationContext.ShouldDismissMenuMode(
+                        ChatApplication.None, usesAlt, hasReply));
+                }
+            }
+            Check(ref failures, ScrollApplicationContext.ShouldDismissMenuMode(
+                ChatApplication.Codex, true, false));
+            Check(ref failures, !ScrollApplicationContext.ShouldDismissMenuMode(
+                ChatApplication.Codex, true, true));
+            Check(ref failures, !ScrollApplicationContext.ShouldDismissMenuMode(
+                ChatApplication.Codex, false, false));
+            Check(ref failures, !ScrollApplicationContext.ShouldDismissMenuMode(
+                ChatApplication.Codex, false, true));
+        }
+
         private static void TestClaudeComposerSelection(ref int failures)
         {
             var window = new System.Windows.Rect(0, 0, 1920, 1042);
@@ -291,6 +315,59 @@ namespace CodexKeyboardScroll
                 Check(ref failures, application == ChatApplication.None);
                 Check(ref failures, !NativeInput.IsApplicationEnabled(application, false));
                 Check(ref failures, !NativeInput.IsApplicationEnabled(application, true));
+            }
+        }
+
+        private static void TestClaudeCodeComposerSelection(ref int failures)
+        {
+            // Captured from Claude's native Code tab: an enabled, focusable Edit
+            // named "Промпт", with no AutomationId or HelpText to identify it.
+            var window = new System.Windows.Rect(-9, -9, 1938, 1060);
+            var codeInput = new System.Windows.Rect(607, 948, 811, 26);
+            double codeScore;
+            double chatScore;
+            double ignored;
+            foreach (string name in new[] { "Промпт", "Prompt", " prompt: ", "ПРОМПТ…", "Prompt..." })
+            {
+                Check(ref failures, ComposerLocator.TryScoreCandidate(
+                    codeInput, window, name, true, true, false,
+                    ChatApplication.Claude, out codeScore));
+                Check(ref failures, ComposerLocator.TryScoreCandidate(
+                    codeInput, window, "Reply to Claude", true, true, false,
+                    ChatApplication.Claude, out chatScore));
+                Check(ref failures, codeScore == chatScore);
+            }
+
+            var upperInput = new System.Windows.Rect(607, 400, 811, 26);
+            var beforeHalf = new System.Windows.Rect(607, 520, 811, 26);
+            var atHalf = new System.Windows.Rect(607, 521, 811, 26);
+            foreach (string name in new[] { "Промпт", "Prompt" })
+            {
+                Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                    upperInput, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
+                Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                    beforeHalf, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
+                Check(ref failures, ComposerLocator.TryScoreCandidate(
+                    atHalf, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
+            }
+            foreach (string name in new[] { "Напишите запрос для Claude", "Reply to Claude" })
+            {
+                Check(ref failures, ComposerLocator.TryScoreCandidate(
+                    upperInput, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
+            }
+            foreach (string name in new[]
+            {
+                "Search Prompt", "Prompt editor", "Prompt settings", "Terminal",
+                "Terminal prompt", "Command Prompt", "Промпт терминала", "Поиск промпта"
+            })
+            {
+                Check(ref failures, !ComposerLocator.TryScoreCandidate(
+                    codeInput, window, name, true, true, false,
+                    ChatApplication.Claude, out ignored));
             }
         }
 

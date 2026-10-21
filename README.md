@@ -25,7 +25,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Includes 18 built-in interface languages and follows the Windows display language by default.
 - Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
 - Can optionally start with Windows; this is disabled by default.
-- Can optionally work in Claude through the `Claude` tray-menu switch; this is disabled by default.
+- Can optionally work in Claude's desktop Chats and Code tabs through the `Claude` tray-menu switch; this is disabled by default.
 - Stores settings in a portable INI file next to the executable.
 
 ## Requirements
@@ -54,8 +54,9 @@ The default focus shortcut is `Alt+F`. Available alternatives are `Ctrl+Alt+F` a
 
 To use the same controls in the Claude desktop app for Windows, enable `Claude` in
 the tray menu. This setting is saved across restarts and can be turned off at any
-time. It applies to the native desktop app; browser tabs and Claude Code terminals
-are outside its scope.
+time. The same switch covers both **Chats** and **Code** inside the native Claude
+desktop app. Browser tabs and Claude Code running in an external terminal are
+outside its scope.
 
 When a question is open in Codex, the first shortcut press focuses its answer field, including
 the custom response field beneath suggested options. Press it again to return to the
@@ -133,11 +134,15 @@ The optional startup setting is stored in the current user's standard Windows `R
 The utility refreshes the active supported app's accessibility tree on a background worker and caches the preferred input. In Codex, visible answer and response fields take priority over the ordinary composer. The focus shortcut requests a fresh lookup so a newly opened or closed question is detected. Input focus is verified after every UI Automation focus request. If an exposed input cannot be focused through accessibility, its own bounds are used for the click fallback. In Codex, a bottom-of-window fallback remains available when no input can be located.
 
 Claude support requires a recognized, named composer exposed through Windows UI
-Automation, including `Напишите запрос для Claude` and `Reply to Claude`. Search
-and unrelated settings fields are excluded. Claude's ordinary `Reply to Claude`
-field does not receive Codex's pending-question behavior. If no recognized composer
-is available, the utility does not guess its position or enter reading mode in
-Claude.
+Automation. In Chats, supported labels include `Напишите запрос для Claude` and
+`Reply to Claude`. In the desktop Code tab, `Промпт` and `Prompt` are recognized
+in the lower half of the window. Search, editor, terminal, and unrelated settings
+fields are excluded. Claude's ordinary `Reply to Claude` field does not receive
+Codex's pending-question behavior. If no recognized composer is available, the
+utility does not guess its position or enter reading mode in Claude.
+
+The focus shortcut does not send Escape in Claude. The menu-dismissal Escape
+workaround remains specific to Alt-based shortcuts in Codex when no question is open.
 
 Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the supported app's child window at the transcript coordinates, so the system pointer never moves or flickers.
 

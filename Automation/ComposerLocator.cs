@@ -503,10 +503,11 @@ namespace CodexKeyboardScroll
             out double score)
         {
             bool claude = application == ChatApplication.Claude;
+            bool claudeCode = claude && IsClaudeCodeComposerName(name);
             bool reply = application == ChatApplication.Codex && HasReplyHint(name);
             score = double.MinValue;
             if (application == ChatApplication.None
-                || (claude && !HasClaudeComposerHint(name))
+                || (claude && !claudeCode && !HasClaudeComposerHint(name))
                 || rect.IsEmpty || rootRect.IsEmpty
                 || !IsScreenCoordinate(rect.Left) || !IsScreenCoordinate(rect.Top)
                 || !IsScreenCoordinate(rect.Right) || !IsScreenCoordinate(rect.Bottom)
@@ -514,7 +515,8 @@ namespace CodexKeyboardScroll
                 || !IsScreenCoordinate(rootRect.Right) || !IsScreenCoordinate(rootRect.Bottom)
                 || rect.Width < 140 || rect.Height < 18
                 || rect.Top < rootRect.Top + (reply ? 55
-                    : claude ? Math.Max(55, rootRect.Height * 0.20) : rootRect.Height * 0.50)
+                    : claude && !claudeCode ? Math.Max(55, rootRect.Height * 0.20)
+                    : rootRect.Height * 0.50)
                 || rect.Bottom > rootRect.Bottom + 2 || rect.Left < rootRect.Left
                 || rect.Right > rootRect.Right + 2 || !enabled || !focusable || offscreen)
             {
@@ -541,6 +543,15 @@ namespace CodexKeyboardScroll
                 || name == "write a message to claude"
                 || name == "\u043d\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u0437\u0430\u043f\u0440\u043e\u0441 \u0434\u043b\u044f claude"
                 || name == "\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0434\u043b\u044f claude";
+        }
+
+        internal static bool IsClaudeCodeComposerName(string value)
+        {
+            string name = (value ?? string.Empty).Trim()
+                .TrimEnd('.', ':', '\u2026').TrimEnd().ToLowerInvariant();
+            // Code uses a generic prompt label, unlike Chats' branded composer.
+            // The caller restricts this label to the lower half of the window.
+            return name == "prompt" || name == "\u043f\u0440\u043e\u043c\u043f\u0442";
         }
 
         private static bool HasReplyHint(string value)

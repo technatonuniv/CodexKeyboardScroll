@@ -4,6 +4,14 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-21
+
+### Fixed
+
+- Recognized the `Промпт` and `Prompt` input fields in Claude's desktop Code tab, using the existing `Claude` switch for both Chats and Code.
+- Kept generic Code input labels restricted to the lower half of the window and excluded search, editor, and terminal fields.
+- Stopped sending the Codex-specific menu-dismissal Escape key when switching focus in Claude.
+
 ## [2.1.0] - 2026-10-20
 
 ### Added
