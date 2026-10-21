@@ -146,6 +146,11 @@ workaround remains specific to Alt-based shortcuts in Codex when no question is 
 
 Scrolling deliberately uses mouse-wheel input. The utility sends `WM_MOUSEWHEEL` directly to the supported app's child window at the transcript coordinates, so the system pointer never moves or flickers.
 
+To reduce pauses during repeated scrolling, the utility caches composer availability
+and limits repeated accessibility checks. Regular arrow keys bypass the typing
+handoff hook; printable keys and Space retain their existing behavior. These changes
+leave the scroll-speed scale and the distance of each scroll step unchanged.
+
 Manual click classification excludes the question card as well as the composer. Focusing an editable field with the mouse or Tab exits reading mode, preserving normal text editing with arrows and Space. If an unusual window layout is not classified correctly, use the focus shortcut.
 
 After the shortcut requests transcript focus, the utility waits for a confirmed

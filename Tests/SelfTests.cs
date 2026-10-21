@@ -25,7 +25,9 @@ namespace CodexKeyboardScroll
             TestFocusToggle(ref failures);
             TestMenuDismissalPolicy(ref failures);
             TestTranscriptFocusSettlement(ref failures);
+            TestComposerSnapshotFreshness(ref failures);
             TestTypingKeys(ref failures);
+            TestTypingHookScope(ref failures);
             TestSpaceScrolling(ref failures);
             TestNavigationScrolling(ref failures);
             TestNavigationReplay(ref failures);
@@ -381,6 +383,50 @@ namespace CodexKeyboardScroll
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x20, true));
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x26, true));
             Check(ref failures, !PrintableKeyClassifier.IsTypingKey(0x70, true));
+        }
+
+        private static void TestComposerSnapshotFreshness(ref int failures)
+        {
+            Check(ref failures, ComposerLocator.IsComposerSnapshotFresh(0));
+            Check(ref failures, ComposerLocator.IsComposerSnapshotFresh(2000));
+            Check(ref failures, ComposerLocator.IsComposerSnapshotFresh(2499));
+            Check(ref failures, !ComposerLocator.IsComposerSnapshotFresh(2500));
+            Check(ref failures, !ComposerLocator.IsComposerSnapshotFresh(-1));
+            Check(ref failures, !ComposerLocator.IsComposerSnapshotFresh(int.MinValue));
+            Check(ref failures, !ComposerLocator.IsComposerSnapshotFresh(int.MaxValue));
+        }
+
+        private static void TestTypingHookScope(ref int failures)
+        {
+            // Repeated navigation is handled by registered hotkeys, without
+            // invoking the typing handoff and its accessibility lookup.
+            foreach (uint key in new uint[] { 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28 })
+            {
+                Check(ref failures, !PrintableKeyClassifier.NeedsTypingHook(key));
+            }
+            // Space must still reach the hook for configurable page scrolling;
+            // printable keys must retain first-character handoff to the composer.
+            foreach (uint key in new uint[]
+            {
+                0x20, 0x41, 0x5A, 0x30, 0x39, 0x60, 0x69, 0x6B, 0x6F, 0xBA, 0xDB, 0xE2
+            })
+            {
+                Check(ref failures, PrintableKeyClassifier.NeedsTypingHook(key));
+                Check(ref failures, !PrintableKeyClassifier.IsModifierKey(key));
+            }
+            foreach (uint key in new uint[]
+            {
+                0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5
+            })
+            {
+                Check(ref failures, !PrintableKeyClassifier.NeedsTypingHook(key));
+                Check(ref failures, PrintableKeyClassifier.IsModifierKey(key));
+            }
+            foreach (uint key in new uint[] { 0x09, 0x0D, 0x1B, 0x70 })
+            {
+                Check(ref failures, !PrintableKeyClassifier.NeedsTypingHook(key));
+                Check(ref failures, !PrintableKeyClassifier.IsModifierKey(key));
+            }
         }
 
         private static void TestSpaceScrolling(ref int failures)

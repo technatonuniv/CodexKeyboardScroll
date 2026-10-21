@@ -2,6 +2,11 @@ namespace CodexKeyboardScroll
 {
     internal static class PrintableKeyClassifier
     {
+        internal static bool NeedsTypingHook(uint virtualKey)
+        {
+            return virtualKey == 0x20 || IsTypingKey(virtualKey, true);
+        }
+
         internal static bool IsModifierKey(uint virtualKey)
         {
             return virtualKey == 0x10 || virtualKey == 0x11 || virtualKey == 0x12

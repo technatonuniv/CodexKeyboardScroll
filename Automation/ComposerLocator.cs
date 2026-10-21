@@ -17,6 +17,7 @@ namespace CodexKeyboardScroll
         private int lastRefreshTick;
         private int refreshRunning;
         private bool hasCompletedRefresh;
+        private int composerValidatedTick;
         private bool disposed;
 
         internal ComposerStatus Status
@@ -37,6 +38,23 @@ namespace CodexKeyboardScroll
         internal bool IsRefreshing
         {
             get { return Interlocked.CompareExchange(ref refreshRunning, 0, 0) != 0; }
+        }
+
+        internal bool HasComposer(IntPtr window)
+        {
+            lock (sync)
+            {
+                int age = unchecked(Environment.TickCount - composerValidatedTick);
+                return cachedWindow == window && composer != null
+                    && IsComposerSnapshotFresh(age);
+            }
+        }
+
+        internal static bool IsComposerSnapshotFresh(int age)
+        {
+            // The worker normally refreshes every two seconds. Stop capture if
+            // a stalled accessibility provider cannot validate the cached input.
+            return age >= 0 && age < 2500;
         }
 
         internal bool HasReplyInput(IntPtr window)
@@ -67,8 +85,30 @@ namespace CodexKeyboardScroll
 
         internal bool HasFocusedInput(IntPtr window)
         {
-            bool focusedInput;
-            return TryGetFocusedInput(window, out focusedInput) && focusedInput;
+            int processId;
+            lock (sync)
+            {
+                processId = cachedWindow == window ? cachedProcessId : 0;
+            }
+            if (processId == 0 || window == IntPtr.Zero
+                || window != NativeInput.GetForegroundWindow()) return false;
+
+            try
+            {
+                AutomationElement focused = AutomationElement.FocusedElement;
+                // Transcript controls are not edits. Avoid walking their entire
+                // cross-process ancestry on every key and reading-mode poll.
+                return focused != null
+                    && focused.Current.ControlType == ControlType.Edit
+                    && focused.Current.IsEnabled
+                    && BelongsToWindow(focused, window)
+                    && window == NativeInput.GetForegroundWindow();
+            }
+            catch (Exception error)
+            {
+                if (!IsExpectedAccessibilityFailure(error)) throw;
+                return false;
+            }
         }
 
         internal bool TryGetFocusedInput(IntPtr window, out bool focusedInput)
@@ -322,6 +362,7 @@ namespace CodexKeyboardScroll
                 cachedWindow = window;
                 cachedProcessId = processId;
                 composer = found;
+                composerValidatedTick = Environment.TickCount;
                 replyInput = isReply;
                 composerContainer = container;
                 hasCompletedRefresh = true;

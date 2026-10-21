@@ -39,6 +39,7 @@ namespace CodexKeyboardScroll
         private IntPtr pendingClickWindow;
         private bool pendingTranscriptFocus;
         private int transcriptFocusTick;
+        private int lastFocusedInputCheckTick;
 
         internal ScrollApplicationContext()
         {
@@ -149,10 +150,15 @@ namespace CodexKeyboardScroll
                     && CanControlWindow(window) && ClickWasInTranscript(pendingClick));
             }
 
-            if (readingMode && (!chatForeground
-                || composerLocator.HasFocusedInput(NativeInput.GetForegroundWindow())))
+            if (readingMode && !chatForeground)
             {
                 SetReadingMode(false);
+            }
+            else if (readingMode
+                && unchecked(Environment.TickCount - lastFocusedInputCheckTick) >= 100)
+            {
+                lastFocusedInputCheckTick = Environment.TickCount;
+                if (composerLocator.HasFocusedInput(window)) SetReadingMode(false);
             }
         }
 
@@ -165,9 +171,8 @@ namespace CodexKeyboardScroll
 
         private bool CanControlWindow(IntPtr window)
         {
-            NativeInput.Rect bounds;
             return NativeInput.GetChatApplication(window) != ChatApplication.Claude
-                || composerLocator.TryGetBounds(window, out bounds);
+                || composerLocator.HasComposer(window);
         }
 
         private void ObserveWindow(IntPtr window)
@@ -201,7 +206,8 @@ namespace CodexKeyboardScroll
                 ? WindowLayout.IsTranscriptClick(rect, click, composerBounds,
                     composerLocator.HasReplyInput(window)
                         || NativeInput.GetChatApplication(window) == ChatApplication.Claude)
-                : WindowLayout.IsTranscriptClick(rect, click);
+                : NativeInput.GetChatApplication(window) != ChatApplication.Claude
+                    && WindowLayout.IsTranscriptClick(rect, click);
         }
 
         private void UpdateFocusHotkey(bool shouldBeActive)
@@ -278,6 +284,7 @@ namespace CodexKeyboardScroll
 
             readingMode = enabled;
             readingWindow = enabled ? NativeInput.GetForegroundWindow() : IntPtr.Zero;
+            if (enabled) lastFocusedInputCheckTick = unchecked(Environment.TickCount - 100);
             UpdateUi();
         }
 
@@ -426,6 +433,13 @@ namespace CodexKeyboardScroll
 
         private bool HandleKeyboardStroke(KeyboardStroke stroke)
         {
+            // Registered navigation hotkeys have their own fresh focus check.
+            // Avoid a second cross-process UIA query in the low-level hook.
+            if (!pendingTranscriptFocus
+                && !PrintableKeyClassifier.NeedsTypingHook(stroke.VirtualKey))
+            {
+                return false;
+            }
             IntPtr window = NativeInput.GetForegroundWindow();
             if (pendingTranscriptFocus && toolEnabled && focusToggleWindow == window
                 && IsEnabledWindow(window) && CanControlWindow(window))
