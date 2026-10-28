@@ -12,6 +12,7 @@ namespace CodexKeyboardScroll
         internal decimal ScrollSpeedLevel = ScrollProfile.DefaultLevel;
         internal bool SpaceScroll = true;
         internal bool ClaudeEnabled;
+        internal bool ChromeEnabled;
         internal string LanguageCode = LocalizationManager.SystemLanguageCode;
         internal bool AutomaticUpdateChecks;
         internal DateTime? LastUpdateCheckUtc;
@@ -72,6 +73,11 @@ namespace CodexKeyboardScroll
             {
                 settings.ClaudeEnabled = flag;
             }
+            else if (key.Equals("ChromeEnabled", StringComparison.OrdinalIgnoreCase)
+                && bool.TryParse(value, out flag))
+            {
+                settings.ChromeEnabled = flag;
+            }
             else if (key.Equals("Language", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(value))
             {
@@ -130,6 +136,7 @@ namespace CodexKeyboardScroll
                 "ScrollSpeed=" + ScrollProfile.DisplayLevel(ScrollSpeedLevel),
                 "SpaceScroll=" + SpaceScroll,
                 "ClaudeEnabled=" + ClaudeEnabled,
+                "ChromeEnabled=" + ChromeEnabled,
                 "Language=" + LanguageCode,
                 "AutomaticUpdateChecks=" + AutomaticUpdateChecks,
                 "LastUpdateCheckUtc=" + (LastUpdateCheckUtc.HasValue

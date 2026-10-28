@@ -44,6 +44,7 @@ namespace CodexKeyboardScroll
             TestDropDownPlacement(ref failures);
             TestTrayMenuEvents(ref failures);
             TestClaudeTrayMenu(ref failures);
+            TestChromeSupport(ref failures);
             TestStartupRegistration(ref failures);
             TestIconResources(ref failures);
             TestWheelMessagePacking(ref failures);
@@ -309,7 +310,7 @@ namespace CodexKeyboardScroll
             }
             foreach (string name in new[]
             {
-                null, string.Empty, "chrome", "msedge", "ClaudeCode", "Claude Helper",
+                null, string.Empty, "msedge", "ClaudeCode", "Claude Helper",
                 "MyClaude", "Claude.exe", "Claude ", "ChatGPTHelper", "CodexCLI"
             })
             {
@@ -872,6 +873,43 @@ namespace CodexKeyboardScroll
             {
                 var item = (ToolStripMenuItem)view.Menu.Items["claudeEnabledItem"];
                 Check(ref failures, item.Checked);
+            }
+        }
+
+        private static void TestChromeSupport(ref int failures)
+        {
+            Check(ref failures, NativeInput.ClassifyProcessName("ChRoMe") == ChatApplication.Chrome);
+            Check(ref failures, !NativeInput.IsApplicationEnabled(ChatApplication.Chrome, true));
+            Check(ref failures, NativeInput.IsApplicationEnabled(ChatApplication.Chrome, false, true));
+            var settings = new UtilitySettings();
+            Check(ref failures, !settings.ChromeEnabled);
+            Check(ref failures, settings.Serialize().Contains("ChromeEnabled=False"));
+            UtilitySettings.Apply(settings, "ChromeEnabled", "true");
+            Check(ref failures, settings.ChromeEnabled);
+            Check(ref failures, settings.Serialize().Contains("ChromeEnabled=True"));
+            UtilitySettings.Apply(settings, "ChromeEnabled", "invalid");
+            Check(ref failures, settings.ChromeEnabled);
+            var window = new System.Windows.Rect(0, 0, 1400, 900);
+            var input = new System.Windows.Rect(550, 750, 600, 50);
+            double score;
+            Check(ref failures, ComposerLocator.TryScoreCandidate(input, window, "Сообщение", true, true, false, ChatApplication.Chrome, out score));
+            Check(ref failures, ComposerLocator.TryScoreCandidate(input, window, "Message", true, true, false, ChatApplication.Chrome, out score));
+            Check(ref failures, !ComposerLocator.TryScoreCandidate(input, window, "Search", true, true, false, ChatApplication.Chrome, out score));
+            Check(ref failures, ComposerLocator.IsNearbyComposerLabel(input, new System.Windows.Rect(560, 760, 80, 20)));
+            Check(ref failures, !ComposerLocator.IsNearbyComposerLabel(input, new System.Windows.Rect(50, 100, 80, 20)));
+            var localizer = new LocalizationManager("ru");
+            settings.ChromeEnabled = false;
+            using (var view = new TrayMenuView(localizer, settings, false))
+            {
+                int changes = 0;
+                bool enabled = false;
+                view.ChromeEnabledChanged += delegate(bool value) { changes++; enabled = value; };
+                var item = (ToolStripMenuItem)view.Menu.Items["chromeEnabledItem"];
+                Check(ref failures, item.Text == "Chrome" && !item.Checked);
+                item.PerformClick();
+                Check(ref failures, item.Checked && enabled && changes == 1);
+                item.PerformClick();
+                Check(ref failures, !item.Checked && !enabled && changes == 2);
             }
         }
 

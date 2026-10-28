@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace CodexKeyboardScroll
 {
@@ -46,6 +47,15 @@ namespace CodexKeyboardScroll
 
         [DllImport("user32.dll")]
         internal static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);
+
+        internal static string WindowTitle(IntPtr window)
+        {
+            var text = new StringBuilder(512);
+            return GetWindowText(window, text, text.Capacity) > 0 ? text.ToString() : string.Empty;
+        }
 
         [DllImport("user32.dll")]
         internal static extern short GetAsyncKeyState(int virtualKey);
@@ -97,14 +107,17 @@ namespace CodexKeyboardScroll
             if (string.Equals(name, "ChatGPT", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "Codex", StringComparison.OrdinalIgnoreCase))
                 return ChatApplication.Codex;
-            return string.Equals(name, "Claude", StringComparison.OrdinalIgnoreCase)
-                ? ChatApplication.Claude : ChatApplication.None;
+            if (string.Equals(name, "Claude", StringComparison.OrdinalIgnoreCase))
+                return ChatApplication.Claude;
+            return string.Equals(name, "chrome", StringComparison.OrdinalIgnoreCase)
+                ? ChatApplication.Chrome : ChatApplication.None;
         }
 
-        internal static bool IsApplicationEnabled(ChatApplication application, bool claudeEnabled)
+        internal static bool IsApplicationEnabled(ChatApplication application, bool claudeEnabled, bool chromeEnabled = false)
         {
             return application == ChatApplication.Codex
-                || (application == ChatApplication.Claude && claudeEnabled);
+                || (application == ChatApplication.Claude && claudeEnabled)
+                || (application == ChatApplication.Chrome && chromeEnabled);
         }
 
         internal static ChatApplication GetChatApplication(IntPtr window)
@@ -202,7 +215,7 @@ namespace CodexKeyboardScroll
             return inserted >= 2;
         }
 
-        internal static bool ScrollWindow(IntPtr window, int wheelDelta)
+        internal static bool ScrollWindow(IntPtr window, int wheelDelta, Point? requestedTarget = null)
         {
             Rect rect;
             if (window == IntPtr.Zero || window != GetForegroundWindow()
@@ -211,7 +224,10 @@ namespace CodexKeyboardScroll
                 return false;
             }
 
-            Point target = WindowLayout.ScrollTarget(rect);
+            Point target = requestedTarget.HasValue
+                && requestedTarget.Value.X >= rect.Left && requestedTarget.Value.X < rect.Right
+                && requestedTarget.Value.Y >= rect.Top && requestedTarget.Value.Y < rect.Bottom
+                ? requestedTarget.Value : WindowLayout.ScrollTarget(rect);
             IntPtr targetWindow = DeepestChildAtPoint(window, target);
             // WM_MOUSEWHEEL carries screen coordinates, so it can target Chromium's
             // transcript directly without ever moving or redrawing the system cursor.

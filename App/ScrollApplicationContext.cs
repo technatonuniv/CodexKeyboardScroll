@@ -26,6 +26,7 @@ namespace CodexKeyboardScroll
         private bool previousLeftButtonDown;
         private bool hasPendingClick;
         private Point pendingClick;
+        private Point? chromeScrollTarget;
         private int pendingClickTick;
         private int focusToggleTick;
         private int nextHotkeyRetryTick;
@@ -34,6 +35,7 @@ namespace CodexKeyboardScroll
         private bool disposed;
         private bool updateCheckInProgress;
         private IntPtr observedWindow;
+        private string observedChromeTitle;
         private IntPtr readingWindow;
         private IntPtr focusToggleWindow;
         private IntPtr pendingClickWindow;
@@ -104,6 +106,7 @@ namespace CodexKeyboardScroll
         {
             menuView.EnabledChanged += ToggleEnabled;
             menuView.ClaudeEnabledChanged += ToggleClaude;
+            menuView.ChromeEnabledChanged += ToggleChrome;
             menuView.ShortcutChanged += ChangeShortcut;
             menuView.SpeedChanged += ChangeSpeed;
             menuView.SpaceScrollChanged += ToggleSpaceBehavior;
@@ -146,8 +149,11 @@ namespace CodexKeyboardScroll
             if (hasPendingClick && unchecked(Environment.TickCount - pendingClickTick) >= 50)
             {
                 hasPendingClick = false;
-                SetReadingMode(toolEnabled && chatForeground && pendingClickWindow == window
-                    && CanControlWindow(window) && ClickWasInTranscript(pendingClick));
+                bool transcriptClick = toolEnabled && chatForeground && pendingClickWindow == window
+                    && CanControlWindow(window) && ClickWasInTranscript(pendingClick);
+                if (transcriptClick && NativeInput.GetChatApplication(window) == ChatApplication.Chrome)
+                    chromeScrollTarget = pendingClick;
+                SetReadingMode(transcriptClick);
             }
 
             if (readingMode && !chatForeground)
@@ -166,7 +172,7 @@ namespace CodexKeyboardScroll
         {
             return window != IntPtr.Zero && window == NativeInput.GetForegroundWindow()
                 && NativeInput.IsApplicationEnabled(
-                    NativeInput.GetChatApplication(window), settings.ClaudeEnabled);
+                    NativeInput.GetChatApplication(window), settings.ClaudeEnabled, settings.ChromeEnabled);
         }
 
         private bool CanControlWindow(IntPtr window)
@@ -177,8 +183,13 @@ namespace CodexKeyboardScroll
 
         private void ObserveWindow(IntPtr window)
         {
-            if (observedWindow == window) return;
+            string title = NativeInput.GetChatApplication(window) == ChatApplication.Chrome
+                ? NativeInput.WindowTitle(window) : null;
+            if (observedWindow == window && string.Equals(observedChromeTitle, title, StringComparison.Ordinal)) return;
             observedWindow = window;
+            observedChromeTitle = title;
+            if (title != null) composerLocator.RequestRefresh(window, true);
+            chromeScrollTarget = null;
             CancelPendingInput();
             SetReadingMode(false);
         }
@@ -307,7 +318,8 @@ namespace CodexKeyboardScroll
             }
 
             NativeInput.ScrollWindow(window,
-                ScrollProfile.WheelDelta(command, settings.ScrollSpeedLevel));
+                ScrollProfile.WheelDelta(command, settings.ScrollSpeedLevel),
+                NativeInput.GetChatApplication(window) == ChatApplication.Chrome ? chromeScrollTarget : null);
         }
 
         private void QueueFocusToggle()
@@ -457,7 +469,8 @@ namespace CodexKeyboardScroll
                     // intent. Route it as a wheel event while focus is settling so
                     // Claude never receives it as message-card navigation.
                     return NativeInput.ScrollWindow(window,
-                        ScrollProfile.WheelDelta(navigation.Value, settings.ScrollSpeedLevel));
+                        ScrollProfile.WheelDelta(navigation.Value, settings.ScrollSpeedLevel),
+                        NativeInput.GetChatApplication(window) == ChatApplication.Chrome ? chromeScrollTarget : null);
                 }
 
                 CancelPendingInput();
@@ -491,7 +504,8 @@ namespace CodexKeyboardScroll
                 commandModifierDown);
             if (scrollCommand.HasValue)
             {
-                if (shiftDown && scrollCommand.Value == ScrollCommand.PageUp)
+                if (shiftDown && scrollCommand.Value == ScrollCommand.PageUp
+                    && NativeInput.GetChatApplication(window) != ChatApplication.Chrome)
                 {
                     return NativeInput.ScrollForegroundWithoutShift(
                         window,
@@ -538,6 +552,18 @@ namespace CodexKeyboardScroll
         private void ToggleClaude(bool enabled)
         {
             settings.ClaudeEnabled = enabled;
+            CancelPendingInput();
+            SetReadingMode(false);
+            SaveSettings();
+            IntPtr window = NativeInput.GetForegroundWindow();
+            UpdateFocusHotkey(toolEnabled && IsEnabledWindow(window) && CanControlWindow(window));
+            UpdateUi();
+        }
+
+        private void ToggleChrome(bool enabled)
+        {
+            settings.ChromeEnabled = enabled;
+            chromeScrollTarget = null;
             CancelPendingInput();
             SetReadingMode(false);
             SaveSettings();

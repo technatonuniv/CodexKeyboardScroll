@@ -4,7 +4,8 @@ namespace CodexKeyboardScroll
     {
         None,
         Codex,
-        Claude
+        Claude,
+        Chrome
     }
 
     internal enum TranscriptFocusState

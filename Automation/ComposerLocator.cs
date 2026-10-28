@@ -493,6 +493,9 @@ namespace CodexKeyboardScroll
                     System.Windows.Rect rect = element.Current.BoundingRectangle;
                     double score;
                     string name = element.Current.Name;
+                    // Some pages expose the input placeholder as a nearby text element.
+                    if (application == ChatApplication.Chrome && string.IsNullOrWhiteSpace(name)
+                        && HasAdjacentChromeComposerHint(element, rect)) name = "Message";
                     if (!TryScoreCandidate(rect, rootRect, name,
                         element.Current.IsEnabled, element.Current.IsKeyboardFocusable,
                         element.Current.IsOffscreen, application, out score))
@@ -544,11 +547,13 @@ namespace CodexKeyboardScroll
             out double score)
         {
             bool claude = application == ChatApplication.Claude;
+            bool chrome = application == ChatApplication.Chrome;
             bool claudeCode = claude && IsClaudeCodeComposerName(name);
             bool reply = application == ChatApplication.Codex && HasReplyHint(name);
             score = double.MinValue;
             if (application == ChatApplication.None
                 || (claude && !claudeCode && !HasClaudeComposerHint(name))
+                || (chrome && !HasChromeComposerHint(name))
                 || rect.IsEmpty || rootRect.IsEmpty
                 || !IsScreenCoordinate(rect.Left) || !IsScreenCoordinate(rect.Top)
                 || !IsScreenCoordinate(rect.Right) || !IsScreenCoordinate(rect.Bottom)
@@ -568,6 +573,42 @@ namespace CodexKeyboardScroll
             if (claude || HasComposerHint(name)) score += 20000;
             if (reply) score += 100000;
             return true;
+        }
+
+        private static bool HasAdjacentChromeComposerHint(AutomationElement element, System.Windows.Rect editRect)
+        {
+            AutomationElement parent = element;
+            for (int depth = 0; depth < 3; depth++)
+            {
+                parent = TreeWalker.ControlViewWalker.GetParent(parent);
+                if (parent == null) return false;
+                System.Windows.Rect bounds = parent.Current.BoundingRectangle;
+                // Do not search a whole page for a label belonging to another field.
+                if (bounds.IsEmpty || bounds.Height > Math.Max(180, editRect.Height * 3)
+                    || bounds.Width > Math.Max(1200, editRect.Width * 3)) break;
+                AutomationElementCollection labels = parent.FindAll(TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text));
+                foreach (AutomationElement label in labels)
+                {
+                    if (!label.Current.IsOffscreen && HasChromeComposerHint(label.Current.Name)
+                        && IsNearbyComposerLabel(editRect, label.Current.BoundingRectangle)) return true;
+                }
+            }
+            return false;
+        }
+
+        internal static bool IsNearbyComposerLabel(System.Windows.Rect edit, System.Windows.Rect label)
+        {
+            return !edit.IsEmpty && !label.IsEmpty && label.Width > 0 && label.Height > 0
+                && label.Left < edit.Right + 30 && label.Right > edit.Left - 30
+                && label.Top < edit.Bottom + 30 && label.Bottom > edit.Top - 30;
+        }
+
+        private static bool HasChromeComposerHint(string value)
+        {
+            string name = (value ?? string.Empty).Trim().TrimEnd('.', ':', '\u2026').TrimEnd();
+            return string.Equals(name, "Сообщение", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "Message", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasClaudeComposerHint(string value)

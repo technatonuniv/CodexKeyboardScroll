@@ -4,6 +4,13 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-28
+
+### Added
+
+- Added optional Chrome scrolling with a persistent `Chrome` tray-menu switch and selection of a scroll area by clicking it.
+- Recognize message fields and nearby accessible placeholders when switching focus.
+
 ## [2.1.1] - 2026-10-21
 
 ### Fixed

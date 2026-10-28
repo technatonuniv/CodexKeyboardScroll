@@ -26,6 +26,7 @@ The executable is unsigned. Review the source, verify the SHA-256 checksum, or b
 - Uses distinct active and waiting tray icons so the current capture state is visible at a glance.
 - Can optionally start with Windows; this is disabled by default.
 - Can optionally work in Claude's desktop Chats and Code tabs through the `Claude` tray-menu switch; this is disabled by default.
+- Can optionally scroll Google Chrome pages with the `Chrome` tray-menu switch, disabled by default.
 - Stores settings in a portable INI file next to the executable.
 
 ## Requirements
@@ -57,6 +58,13 @@ the tray menu. This setting is saved across restarts and can be turned off at an
 time. The same switch covers both **Chats** and **Code** inside the native Claude
 desktop app. Browser tabs and Claude Code running in an external terminal are
 outside its scope.
+
+Enable `Chrome` in the tray menu to use scrolling in Google Chrome. Click the
+scrollable area first to select it, then use the navigation keys. The focus shortcut
+uses the central area if no area has been selected. Composer focus is available
+for recognizable message fields; other sites may require clicking
+their input field manually. The browser shortcut can override its normal action
+while Chrome support is enabled.
 
 When a question is open in Codex, the first shortcut press focuses its answer field, including
 the custom response field beneath suggested options. Press it again to return to the
@@ -117,6 +125,7 @@ FocusShortcut=AltF
 ScrollSpeed=5
 SpaceScroll=True
 ClaudeEnabled=False
+ChromeEnabled=False
 Language=system
 AutomaticUpdateChecks=False
 LastUpdateCheckUtc=
@@ -169,7 +178,7 @@ If all supported focus shortcuts are temporarily occupied, registration is retri
 - It does not require administrator privileges.
 - It contacts `api.github.com` after a manual request or, when explicitly enabled, at most once every 24 hours for an automatic update check.
 - It installs a low-level keyboard hook to detect the first typing key in reading mode. Key events are not logged, stored, or transmitted.
-- Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process, or `Claude.exe` when `Claude` is enabled.
+- Scrolling and focus behavior are activated only while `ChatGPT.exe` or `Codex.exe` is the foreground process, or `Claude.exe` when `Claude` is enabled, or `chrome.exe` when `Chrome` is enabled.
 - The source code is included so the executable can be reviewed and rebuilt locally.
 
 ## Build from source
