@@ -134,10 +134,13 @@ namespace CodexKeyboardScroll
             bool leftDown = (NativeInput.GetAsyncKeyState(NativeInput.VkLeftButton) & 0x8000) != 0;
             if (leftDown && !previousLeftButtonDown)
             {
-                if (pendingTranscriptFocus) CancelPendingInput();
                 NativeInput.PointNative point;
-                if (NativeInput.GetCursorPos(out point))
+                // An on-screen keyboard may be topmost without becoming the
+                // foreground window. Its clicks must not retarget the transcript.
+                if (NativeInput.GetCursorPos(out point)
+                    && NativeInput.IsClickInForegroundWindow(window, point))
                 {
+                    if (pendingTranscriptFocus) CancelPendingInput();
                     pendingClick = new Point(point.X, point.Y);
                     pendingClickTick = Environment.TickCount;
                     pendingClickWindow = window;

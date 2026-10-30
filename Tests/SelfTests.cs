@@ -18,6 +18,7 @@ namespace CodexKeyboardScroll
         {
             int failures = 0;
             TestWindowLayout(ref failures);
+            TestForegroundClickRoot(ref failures);
             TestReplySelection(ref failures);
             TestClaudeComposerSelection(ref failures);
             TestClaudeCodeComposerSelection(ref failures);
@@ -49,6 +50,16 @@ namespace CodexKeyboardScroll
             TestIconResources(ref failures);
             TestWheelMessagePacking(ref failures);
             return failures;
+        }
+
+        private static void TestForegroundClickRoot(ref int failures)
+        {
+            var browser = new IntPtr(123);
+            var overlay = new IntPtr(456);
+            Check(ref failures, NativeInput.IsForegroundClickRoot(browser, browser));
+            Check(ref failures, !NativeInput.IsForegroundClickRoot(browser, overlay));
+            Check(ref failures, !NativeInput.IsForegroundClickRoot(browser, IntPtr.Zero));
+            Check(ref failures, !NativeInput.IsForegroundClickRoot(IntPtr.Zero, IntPtr.Zero));
         }
 
         private static void TestWindowLayout(ref int failures)

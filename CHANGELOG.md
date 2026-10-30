@@ -4,6 +4,12 @@ All notable changes to Codex Keyboard Scroll are documented here.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-30
+
+### Fixed
+
+- Improved on-screen keyboard support in Chrome.
+
 ## [2.2.0] - 2026-10-28
 
 ### Added

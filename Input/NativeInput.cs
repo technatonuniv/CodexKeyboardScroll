@@ -64,6 +64,23 @@ namespace CodexKeyboardScroll
         internal static extern bool GetCursorPos(out PointNative point);
 
         [DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPoint(PointNative point);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+        internal static bool IsClickInForegroundWindow(IntPtr foreground, PointNative point)
+        {
+            IntPtr hit = WindowFromPoint(point);
+            return IsForegroundClickRoot(foreground, hit == IntPtr.Zero ? IntPtr.Zero : GetAncestor(hit, 2));
+        }
+
+        internal static bool IsForegroundClickRoot(IntPtr foreground, IntPtr hitRoot)
+        {
+            return foreground != IntPtr.Zero && foreground == hitRoot;
+        }
+
+        [DllImport("user32.dll")]
         internal static extern bool GetWindowRect(IntPtr window, out Rect rect);
 
         [DllImport("user32.dll", SetLastError = true)]
